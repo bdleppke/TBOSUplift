@@ -28,12 +28,14 @@ private:
     /* control requests */
    // controls::DutyCycleOut cabOut{0};
    // controls::DutyCycleOut tailOut{0};
+   ctre::phoenix6::controls::MotionMagicVoltage m_mmReq{0_tr};
 
 
     /* joystick */
     Joystick joy{0};
   //  float motorspeed;
     bool buttonpressed = false;
+    float maxlift = 50;
 
 public:
     /* main uplift interface */
@@ -59,6 +61,7 @@ void UpLift::UpLiftInit()
 
   /* Configure current limits */
   configs::MotionMagicConfigs &mm = cfg.MotionMagic;
+ // MotionMagicVoltage m_mmReq = new MotionMagicVoltage(0);
   mm.MotionMagicCruiseVelocity = 70; // 5 rotations per second cruise
   mm.MotionMagicAcceleration = 25; // Set to 250 to match what we were using on elevator
   // Take approximately 0.2 seconds to reach max accel 
@@ -85,7 +88,7 @@ void UpLift::UpLiftInit()
   }
 /*
   cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
-  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for(int i = 0; i < 5; ++i) {
     status = passengerCabFollower.GetConfigurator().Apply(cfg);
     if (status.IsOK()) break;
@@ -95,7 +98,7 @@ void UpLift::UpLiftInit()
   }
 */
   cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
-  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for(int i = 0; i < 5; ++i) {
     status = driverTailLeader.GetConfigurator().Apply(cfg);
     if (status.IsOK()) break;
@@ -105,7 +108,7 @@ void UpLift::UpLiftInit()
   }
 /*
   cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
-  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for(int i = 0; i < 5; ++i) {
     status = passengerTailFollower.GetConfigurator().Apply(cfg);
     if (status.IsOK()) break;
@@ -118,7 +121,7 @@ void UpLift::UpLiftInit()
     /* set follower motors to follow leaders; do NOT oppose the leaders' inverts */
  //   passengerCabFollower.SetControl(controls::Follower{driverCabLeader.GetDeviceID(), false});
  //   passengerTailFollower.SetControl(controls::Follower{driverTailLeader.GetDeviceID(), false});
-    maxlift = 50;
+   
 
     gpioInitialise();
 }
@@ -160,7 +163,7 @@ void UpLift::EnabledPeriodic()
     if (gpioRead(22) == 0)  // all up
     {
         driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift).WithSlot(0));
-        driverTailLeader.SetControl(m_mmReq.WithPosition(maxlif).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift).WithSlot(0));
         buttonpressed = true;
     }
     else if (gpioRead(23) == 0) // all down
