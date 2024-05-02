@@ -20,22 +20,19 @@ private:
     static constexpr char const *CANBUS_NAME = "can0";
 
     /* devices */
-    hardware::TalonFX leftLeader{0, CANBUS_NAME};
-   // hardware::TalonFX leftFollower{1, CANBUS_NAME};
-    hardware::TalonFX rightLeader{2, CANBUS_NAME};
-  //  hardware::TalonFX rightFollower{3, CANBUS_NAME};
+    hardware::TalonFX driverCabLeader{0, CANBUS_NAME};
+  //  hardware::TalonFX passengerCabFollower{1, CANBUS_NAME};
+    hardware::TalonFX driverTailLeader{2, CANBUS_NAME};
+ //   hardware::TalonFX passengerTailFollower{3, CANBUS_NAME};
 
     /* control requests */
-    controls::DutyCycleOut leftOut{0};
-    controls::DutyCycleOut rightOut{0};
-
-
-
+   // controls::DutyCycleOut cabOut{0};
+   // controls::DutyCycleOut tailOut{0};
 
 
     /* joystick */
     Joystick joy{0};
-    float motorspeed;
+  //  float motorspeed;
     bool buttonpressed = false;
 
 public:
@@ -57,23 +54,76 @@ public:
  */
 void UpLift::UpLiftInit()
 {
-    gpioInitialise();
-    configs::TalonFXConfiguration fx_cfg{};
 
+  configs::TalonFXConfiguration cfg{};
 
-    fx_cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
-    leftLeader.GetConfigurator().Apply(fx_cfg);
+  /* Configure current limits */
+  configs::MotionMagicConfigs &mm = cfg.MotionMagic;
+  mm.MotionMagicCruiseVelocity = 70; // 5 rotations per second cruise
+  mm.MotionMagicAcceleration = 25; // Set to 250 to match what we were using on elevator
+  // Take approximately 0.2 seconds to reach max accel 
+  mm.MotionMagicJerk = 0;
 
-  
-    fx_cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
-    rightLeader.GetConfigurator().Apply(fx_cfg);
+  configs::Slot0Configs &slot0 = cfg.Slot0;
+  slot0.kP = 4.9;
+  slot0.kI = 0;
+  slot0.kD = 0.0078125;
+  slot0.kV = 0.009375;
+  slot0.kS = 0.02; // Approximately 0.25V to get the mechanism moving
 
-    motorspeed = 0;
+  configs::FeedbackConfigs &fdb = cfg.Feedback;
+  fdb.SensorToMechanismRatio = 1.0;
+
+  cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
+  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  for(int i = 0; i < 5; ++i) {
+    status = driverCabLeader.GetConfigurator().Apply(cfg);
+    if (status.IsOK()) break;
+  }
+  if (!status.IsOK()) {
+    std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+  }
+/*
+  cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
+  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  for(int i = 0; i < 5; ++i) {
+    status = passengerCabFollower.GetConfigurator().Apply(cfg);
+    if (status.IsOK()) break;
+  }
+  if (!status.IsOK()) {
+    std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+  }
+*/
+  cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
+  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  for(int i = 0; i < 5; ++i) {
+    status = driverTailLeader.GetConfigurator().Apply(cfg);
+    if (status.IsOK()) break;
+  }
+  if (!status.IsOK()) {
+    std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+  }
+/*
+  cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
+  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  for(int i = 0; i < 5; ++i) {
+    status = passengerTailFollower.GetConfigurator().Apply(cfg);
+    if (status.IsOK()) break;
+  }
+  if (!status.IsOK()) {
+    std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+  }
+  */
 
     /* set follower motors to follow leaders; do NOT oppose the leaders' inverts */
-   // leftFollower.SetControl(controls::Follower{leftLeader.GetDeviceID(), false});
-  //  rightFollower.SetControl(controls::Follower{rightLeader.GetDeviceID(), false});
+ //   passengerCabFollower.SetControl(controls::Follower{driverCabLeader.GetDeviceID(), false});
+ //   passengerTailFollower.SetControl(controls::Follower{driverTailLeader.GetDeviceID(), false});
+    maxlift = 50;
+
+    gpioInitialise();
 }
+    
+
 
 /**
  * Runs periodically during program execution.
@@ -105,24 +155,40 @@ void UpLift::EnabledInit() {}
  */
 void UpLift::EnabledPeriodic()
 {
-     gpioInitialise();
+    gpioInitialise();
 
-       if(gpioRead(22) == 0)
+    if (gpioRead(22) == 0)  // all up
     {
-        leftOut.Output = 0.1;
-
-    } else if (gpioRead(23) == 0) {
-        leftOut.Output = -0.1;
-    } else if (buttonpressed = true) {
-        buttonpressed = false;
-       leftOut.Output = 0.0;
+        driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(maxlif).WithSlot(0));
+        buttonpressed = true;
     }
-        leftLeader.SetControl(leftOut);
-        rightLeader.SetControl(leftOut);
+    else if (gpioRead(23) == 0) // all down
+    {
+        driverCabLeader.SetControl(m_mmReq.WithPosition(0.0).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(0.0).WithSlot(0));
+        buttonpressed = true;
+    }
+    else if (gpioRead(5) == 0)  // twist up
+    {
+        driverCabLeader.SetControl(m_mmReq.WithPosition(0.0).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift).WithSlot(0));
+        buttonpressed = true;
+    }
+    else if (gpioRead(6) == 0) // twist down
+    {
+        driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(0.0).WithSlot(0));
+        buttonpressed = true;
+    }
+    else if (buttonpressed = true)
+    {
+        buttonpressed = false;
+        driverCabLeader.SetControl(controls::NeutralOut{});
+        driverTailLeader.SetControl(controls::NeutralOut{});
+    }
 
 }
-
-
 
 /**
  * Runs when transitioning from enabled to disabled,
@@ -135,8 +201,8 @@ void UpLift::DisabledInit() {}
  */
 void UpLift::DisabledPeriodic()
 {
-    leftLeader.SetControl(controls::NeutralOut{});
-    rightLeader.SetControl(controls::NeutralOut{});
+    driverCabLeader.SetControl(controls::NeutralOut{});
+    driverTailLeader.SetControl(controls::NeutralOut{});
 }
 
 
