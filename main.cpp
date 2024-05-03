@@ -35,7 +35,7 @@ private:
     Joystick joy{0};
   //  float motorspeed;
     bool buttonpressed = false;
-    float maxlift = 50;
+    double maxlift = 50;
 
 public:
     /* main uplift interface */
@@ -162,26 +162,26 @@ void UpLift::EnabledPeriodic()
 
     if (gpioRead(22) == 0)  // all up
     {
-        driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift).WithSlot(0));
-        driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift).WithSlot(0));
+        driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
         buttonpressed = true;
     }
     else if (gpioRead(23) == 0) // all down
     {
-        driverCabLeader.SetControl(m_mmReq.WithPosition(0.0).WithSlot(0));
-        driverTailLeader.SetControl(m_mmReq.WithPosition(0.0).WithSlot(0));
+        driverCabLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
         buttonpressed = true;
     }
     else if (gpioRead(5) == 0)  // twist up
     {
-        driverCabLeader.SetControl(m_mmReq.WithPosition(0.0).WithSlot(0));
-        driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift).WithSlot(0));
+        driverCabLeader.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift* 1_tr).WithSlot(0));
         buttonpressed = true;
     }
     else if (gpioRead(6) == 0) // twist down
     {
-        driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift).WithSlot(0));
-        driverTailLeader.SetControl(m_mmReq.WithPosition(0.0).WithSlot(0));
+        driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift* 1_tr).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
         buttonpressed = true;
     }
     else if (buttonpressed = true)
