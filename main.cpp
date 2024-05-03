@@ -208,33 +208,30 @@ void UpLift::DisabledPeriodic()
     driverTailLeader.SetControl(controls::NeutralOut{});
 }
 
-
-
 /* ------ main function ------ */
 int main()
 {
 
-
     gpioInitialise();
     gpioSetMode(22, PI_INPUT);
     gpioSetMode(23, PI_INPUT);
-   gpioSetPullUpDown(22, PI_PUD_UP);
-   gpioSetPullUpDown(23, PI_PUD_UP);
+    gpioSetPullUpDown(22, PI_PUD_UP);
+    gpioSetPullUpDown(23, PI_PUD_UP);
 
 
-
+    gpioSetMode(5, PI_INPUT);
+    gpioSetMode(6, PI_INPUT);
+    gpioSetPullUpDown(5, PI_PUD_UP);
+    gpioSetPullUpDown(6, PI_PUD_UP);
     /* create and run uplift */
     UpLift uplift{};
     // uplift.SetLoopTime(20_ms); // optionally change loop time for periodic calls
 
     uplift.Run();
-       httplib::Server svr;
-   svr.Get("/go", [](const httplib::Request &, httplib::Response &res)
-           { 
-            res.set_content("Hello World!", "text/plain"); });
+    httplib::Server svr;
+    svr.Get("/go", [](const httplib::Request &, httplib::Response &res)
+            { res.set_content("Hello World!", "text/plain"); });
 
     svr.listen("0.0.0.0", 8080);
     return true;
-
-
 }
