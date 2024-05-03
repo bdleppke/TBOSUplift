@@ -35,7 +35,7 @@ private:
     Joystick joy{0};
   //  float motorspeed;
     bool buttonpressed = false;
-    double maxlift = -1500;
+    double maxlift = -877;
 
 public:
     /* main uplift interface */
@@ -62,8 +62,8 @@ void UpLift::UpLiftInit()
   /* Configure current limits */
   configs::MotionMagicConfigs &mm = cfg.MotionMagic;
  // MotionMagicVoltage m_mmReq = new MotionMagicVoltage(0);
-  mm.MotionMagicCruiseVelocity = 70; // 5 rotations per second cruise
-  mm.MotionMagicAcceleration = 25; // Set to 250 to match what we were using on elevator
+  mm.MotionMagicCruiseVelocity = 90; // 5 rotations per second cruise
+  mm.MotionMagicAcceleration = 200; // Set to 250 to match what we were using on elevator
   // Take approximately 0.2 seconds to reach max accel 
   mm.MotionMagicJerk = 0;
 
@@ -144,8 +144,9 @@ bool UpLift::IsEnabled()
 {
     /* enable while joystick is an Xbox controller (6 axes),
      * and we are holding the right bumper */
-    if (joy.GetNumAxes() < 6) return false;
-    return joy.GetButton(5); // SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
+   // if (joy.GetNumAxes() < 6) return false;
+   // return joy.GetButton(5); // SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
+   return true;
 }
 
 /**
@@ -172,8 +173,8 @@ void UpLift::EnabledPeriodic()
     {
         driverCabLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
         driverTailLeader.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
-        passengerCabLfollower.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-        passengerTailfollower.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
+        passengerCabFollower.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+        passengerTailFollower.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
         buttonpressed = true;
     }
     else if (gpioRead(5) == 0)  // twist up
