@@ -21,9 +21,9 @@ private:
 
     /* devices */
     hardware::TalonFX driverCabLeader{0, CANBUS_NAME};
-  //  hardware::TalonFX passengerCabFollower{1, CANBUS_NAME};
+    hardware::TalonFX passengerCabFollower{1, CANBUS_NAME};
     hardware::TalonFX driverTailLeader{2, CANBUS_NAME};
- //   hardware::TalonFX passengerTailFollower{3, CANBUS_NAME};
+    hardware::TalonFX passengerTailFollower{3, CANBUS_NAME};
 
     /* control requests */
    // controls::DutyCycleOut cabOut{0};
@@ -35,7 +35,7 @@ private:
     Joystick joy{0};
   //  float motorspeed;
     bool buttonpressed = false;
-    double maxlift = 50;
+    double maxlift = -1500;
 
 public:
     /* main uplift interface */
@@ -77,7 +77,7 @@ void UpLift::UpLiftInit()
   configs::FeedbackConfigs &fdb = cfg.Feedback;
   fdb.SensorToMechanismRatio = 1.0;
 
-  cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
+  cfg.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
   ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for(int i = 0; i < 5; ++i) {
     status = driverCabLeader.GetConfigurator().Apply(cfg);
@@ -86,8 +86,8 @@ void UpLift::UpLiftInit()
   if (!status.IsOK()) {
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
   }
-/*
-  cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
+
+  cfg.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
   status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for(int i = 0; i < 5; ++i) {
     status = passengerCabFollower.GetConfigurator().Apply(cfg);
@@ -96,8 +96,8 @@ void UpLift::UpLiftInit()
   if (!status.IsOK()) {
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
   }
-*/
-  cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
+
+  cfg.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
   status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for(int i = 0; i < 5; ++i) {
     status = driverTailLeader.GetConfigurator().Apply(cfg);
@@ -106,8 +106,8 @@ void UpLift::UpLiftInit()
   if (!status.IsOK()) {
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
   }
-/*
-  cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
+
+  cfg.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
   status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for(int i = 0; i < 5; ++i) {
     status = passengerTailFollower.GetConfigurator().Apply(cfg);
@@ -116,11 +116,11 @@ void UpLift::UpLiftInit()
   if (!status.IsOK()) {
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
   }
-  */
+
 
     /* set follower motors to follow leaders; do NOT oppose the leaders' inverts */
- //   passengerCabFollower.SetControl(controls::Follower{driverCabLeader.GetDeviceID(), false});
- //   passengerTailFollower.SetControl(controls::Follower{driverTailLeader.GetDeviceID(), false});
+//   passengerCabFollower.SetControl(controls::Follower{driverCabLeader.GetDeviceID(), false});
+ //  passengerTailFollower.SetControl(controls::Follower{driverTailLeader.GetDeviceID(), false});
    
 
     gpioInitialise();
@@ -164,24 +164,32 @@ void UpLift::EnabledPeriodic()
     {
         driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
         driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+        passengerCabFollower.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+        passengerTailFollower.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
         buttonpressed = true;
     }
     else if (gpioRead(23) == 0) // all down
     {
         driverCabLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
         driverTailLeader.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
+        passengerCabLfollower.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+        passengerTailfollower.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
         buttonpressed = true;
     }
     else if (gpioRead(5) == 0)  // twist up
     {
         driverCabLeader.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
         driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift* 1_tr).WithSlot(0));
+        passengerCabFollower.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
+        passengerTailFollower.SetControl(m_mmReq.WithPosition(maxlift* 1_tr).WithSlot(0));
         buttonpressed = true;
     }
     else if (gpioRead(6) == 0) // twist down
     {
         driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift* 1_tr).WithSlot(0));
         driverTailLeader.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
+        passengerCabFollower.SetControl(m_mmReq.WithPosition(maxlift* 1_tr).WithSlot(0));
+        passengerTailFollower.SetControl(m_mmReq.WithPosition(0.0* 1_tr).WithSlot(0));
         buttonpressed = true;
     }
     else if (buttonpressed = true)
@@ -189,6 +197,8 @@ void UpLift::EnabledPeriodic()
         buttonpressed = false;
         driverCabLeader.SetControl(controls::NeutralOut{});
         driverTailLeader.SetControl(controls::NeutralOut{});
+        passengerCabFollower.SetControl(controls::NeutralOut{});
+        passengerTailFollower.SetControl(controls::NeutralOut{});
     }
 
 }
