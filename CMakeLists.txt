@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.9)
 project(uplift)
 
 # Use C++17
@@ -19,16 +19,18 @@ find_package(phoenix6 REQUIRED)
 find_package(Threads REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(pigpio REQUIRED)
+# find_package(cpprestsdk REQUIRED)
 
 # NOTE: The units library requires either <fmt/format.h> or <iostream>, use iostream
 add_definitions(-DUNIT_LIB_DISABLE_FMT -DUNIT_LIB_ENABLE_IOSTREAM)
 
 # Add all CPP files to the executable
 # Note: Users using GameController should swap out Joystick.cpp with GameController.cpp
-add_executable(${PROJECT_NAME} main.cpp UpLiftBase.cpp Joystick.cpp)
+add_executable(${PROJECT_NAME} main.cpp UpLiftBase.cpp)
 
 # Specify libraries to link against
 target_link_libraries(${PROJECT_NAME} phoenix6)
 target_link_libraries(${PROJECT_NAME} Threads::Threads)
 target_link_libraries(${PROJECT_NAME} ${SDL2_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} pigpio)
+#target_link_libraries(${PROJECT_NAME} cpprestsdk::cpprest)
