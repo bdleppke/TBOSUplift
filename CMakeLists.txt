@@ -4,7 +4,7 @@ project(uplift)
 # Use C++17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/home/tbos/tbosCode/TBOSUplift/build/modules")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/home/tbos/code/TBOSUplift/build/modules")
 
 # Set compiler flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
