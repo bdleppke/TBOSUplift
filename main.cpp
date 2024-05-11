@@ -47,6 +47,7 @@ using namespace std;		// No need to keep using “std”
 #include "UpLiftBase.hpp"
 //#include "Joystick.hpp"
 
+#include <ctre/phoenix6/CANcoder.hpp>
 
 using namespace ctre::phoenix6;
 
@@ -64,6 +65,8 @@ private:
     hardware::TalonFX passengerCabFollower{1, CANBUS_NAME};
     hardware::TalonFX driverTailLeader{2, CANBUS_NAME};
     hardware::TalonFX passengerTailFollower{3, CANBUS_NAME};
+    hardware::CANcoder cancoder1{1, CANBUS_NAME};
+    hardware::CANcoder cancoder2{2, CANBUS_NAME};
 
     /* control requests */
    // controls::DutyCycleOut cabOut{0};
@@ -76,6 +79,9 @@ private:
   //  float motorspeed;
     bool buttonpressed = false;
     double maxlift = -877;
+        // Gear ratios for the encoders
+    int gearRatio1 = 9;
+    int gearRatio2 = 37;
 
 public:
     /* main uplift interface */
@@ -91,11 +97,75 @@ public:
 
 };
 
+// Function to calculate the greatest common divisor (GCD) using Euclid's algorithm
+int gcd(int a, int b) {
+    if (b == 0) return a;
+    return gcd(b, a % b);
+}
+
+// Function to calculate the least common multiple (LCM)
+int lcm(int a, int b) {
+    return (a * b) / gcd(a, b);
+}
+
+// Function to calculate the elevator position using Chinese remainder theorem (CRT)
+double calculateElevatorPosition(double encoder1, double encoder2, int gearRatio1, int gearRatio2) {
+    // Convert the floating-point encoder values to integers for easier computation
+    int r1 = static_cast<int>(encoder1 * gearRatio1);
+    int r2 = static_cast<int>(encoder2 * gearRatio2);
+
+    // Calculate the remainders
+    int a1 = r1 % gearRatio1;
+    int a2 = r2 % gearRatio2;
+
+    // Calculate the moduli
+    int m1 = gearRatio1;
+    int m2 = gearRatio2;
+
+    // Calculate the least common multiple of moduli
+    int M = lcm(m1, m2);
+
+    // Calculate the coefficients for CRT
+    int M1 = M / m1;
+    int M2 = M / m2;
+
+    // Calculate the inverse of M1 modulo m1
+    int y1 = 1;
+    while ((M1 * y1) % m1 != 1) {
+        y1++;
+    }
+
+    // Calculate the inverse of M2 modulo m2
+    int y2 = 1;
+    while ((M2 * y2) % m2 != 1) {
+        y2++;
+    }
+
+    // Calculate the CRT solution
+    int x = (a1 * M1 * y1 + a2 * M2 * y2) % M;
+
+    // Convert the integer solution back to a floating-point number
+    return static_cast<double>(x) / M;
+}
+
+
 /**
  * Runs once at code initialization.
  */
 void UpLift::UpLiftInit()
 {
+
+  configs::CANcoderConfiguration toApply{};
+
+  /* User can change the configs if they want, or leave it empty for factory-default */
+
+  cancoder1.GetConfigurator().Apply(toApply);
+  cancoder2.GetConfigurator().Apply(toApply);
+
+  /* Speed up signals to an appropriate rate */
+  cancoder1.GetPosition().SetUpdateFrequency(100_Hz);
+  cancoder2.GetPosition().SetUpdateFrequency(100_Hz);
+
 
   configs::TalonFXConfiguration cfg{};
 
@@ -242,6 +312,12 @@ void UpLift::EnabledPeriodic()
         passengerTailFollower.SetControl(controls::NeutralOut{});
     }
 
+        auto &pos1 = cancoder1.GetPosition();
+        auto &pos2 = cancoder2.GetPosition();
+        double elevatorPosition = calculateElevatorPosition(pos1, pos2, gearRatio1, gearRatio2);
+        std::cout << "Elevator Position: " << elevatorPosition << std::endl;
+
+
 }
 
 /**
@@ -263,7 +339,20 @@ void UpLift::DisabledPeriodic()
 
 int main()
 {
-     gpioInitialise();
+      // Sample encoder values (between 0 and 1)
+    double encoder1 = 0.75;
+    double encoder2 = 0.45;
+
+
+    // Calculate the elevator position
+    double elevatorPosition = calculateElevatorPosition(encoder1, encoder2, gearRatio1, gearRatio2);
+
+    // Output the calculated position
+    std::cout << "Elevator Position: " << elevatorPosition << std::endl;
+
+
+
+    gpioInitialise();
     gpioSetMode(22, PI_INPUT);
     gpioSetMode(23, PI_INPUT);
     gpioSetPullUpDown(22, PI_PUD_UP);
