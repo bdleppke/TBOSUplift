@@ -65,8 +65,8 @@ private:
     hardware::TalonFX passengerCabFollower{1, CANBUS_NAME};
     hardware::TalonFX driverTailLeader{2, CANBUS_NAME};
     hardware::TalonFX passengerTailFollower{3, CANBUS_NAME};
-    hardware::CANcoder cancoder1{1, CANBUS_NAME};
-    hardware::CANcoder cancoder2{2, CANBUS_NAME};
+    hardware::CANcoder cancoder1{5, CANBUS_NAME};
+    hardware::CANcoder cancoder2{6, CANBUS_NAME};
 
     /* control requests */
    // controls::DutyCycleOut cabOut{0};
@@ -80,8 +80,7 @@ private:
     bool buttonpressed = false;
     double maxlift = -877;
         // Gear ratios for the encoders
-    int gearRatio1 = 9;
-    int gearRatio2 = 37;
+
 
 public:
     /* main uplift interface */
@@ -312,8 +311,8 @@ void UpLift::EnabledPeriodic()
         passengerTailFollower.SetControl(controls::NeutralOut{});
     }
 
-        auto &pos1 = cancoder1.GetPosition();
-        auto &pos2 = cancoder2.GetPosition();
+        auto &pos1 = cancoder1.GetPosition().getValueAsDouble();
+        auto &pos2 = cancoder2.GetPosition().getValueAsDouble();
         double elevatorPosition = calculateElevatorPosition(pos1, pos2, gearRatio1, gearRatio2);
         std::cout << "Elevator Position: " << elevatorPosition << std::endl;
 
@@ -342,6 +341,8 @@ int main()
       // Sample encoder values (between 0 and 1)
     double encoder1 = 0.75;
     double encoder2 = 0.45;
+    int gearRatio1 = 9;
+    int gearRatio2 = 37;
 
 
     // Calculate the elevator position
