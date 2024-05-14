@@ -40,6 +40,8 @@ void respond(const http_request& request, const status_code& status, const json:
 */
 #include <iostream>		// Include all needed libraries here
 #include <pigpio.h>
+#include <cmath>
+#include <limits>
 
 using namespace std;		// No need to keep using “std”
 
@@ -96,57 +98,33 @@ public:
 
 };
 
-// Function to calculate the greatest common divisor (GCD) using Euclid's algorithm
-int gcd(int a, int b) {
-    if (b == 0) return a;
-    return gcd(b, a % b);
-}
 
-// Function to calculate the least common multiple (LCM)
-int lcm(int a, int b) {
-    return (a * b) / gcd(a, b);
-}
+// Function to calculate the closest position
+double calculateClosestPosition(double encoder1, double encoder2, int teeth1, int teeth2, int maxRotations) {
+    double minDifference = std::numeric_limits<double>::max();
+    double closestPosition = 0.0;
 
-// Function to calculate the elevator position using Chinese remainder theorem (CRT)
-double calculateElevatorPosition(double encoder1, double encoder2, int gearRatio1, int gearRatio2) {
-    // Convert the floating-point encoder values to integers for easier computation
-    int r1 = static_cast<int>(encoder1 * gearRatio1);
-    int r2 = static_cast<int>(encoder2 * gearRatio2);
+    // Iterate through all possible rotations of the 32-tooth gear
+    for (int i = 0; i <= maxRotations; ++i) {
+        // Calculate the position of the 32-tooth gear
+        double position1 = i + encoder1;
 
-    // Calculate the remainders
-    int a1 = r1 % gearRatio1;
-    int a2 = r2 % gearRatio2;
+        // Calculate the corresponding position of the 39-tooth gear
+        double position2 = position1 * teeth1 / teeth2;
+        double fractionalPart = position2 - std::floor(position2);
 
-    // Calculate the moduli
-    int m1 = gearRatio1;
-    int m2 = gearRatio2;
+        // Calculate the difference between the calculated position and the encoder reading
+        double difference = std::abs(fractionalPart - encoder2);
 
-    // Calculate the least common multiple of moduli
-    int M = lcm(m1, m2);
-
-    // Calculate the coefficients for CRT
-    int M1 = M / m1;
-    int M2 = M / m2;
-
-    // Calculate the inverse of M1 modulo m1
-    int y1 = 1;
-    while ((M1 * y1) % m1 != 1) {
-        y1++;
+        // If the difference is smaller than the minimum difference found so far, update the closest position
+        if (difference < minDifference) {
+            minDifference = difference;
+            closestPosition = position1;
+        }
     }
 
-    // Calculate the inverse of M2 modulo m2
-    int y2 = 1;
-    while ((M2 * y2) % m2 != 1) {
-        y2++;
-    }
-
-    // Calculate the CRT solution
-    int x = (a1 * M1 * y1 + a2 * M2 * y2) % M;
-
-    // Convert the integer solution back to a floating-point number
-    return static_cast<double>(x) / M;
+    return closestPosition;
 }
-
 
 /**
  * Runs once at code initialization.
@@ -311,10 +289,7 @@ void UpLift::EnabledPeriodic()
         passengerTailFollower.SetControl(controls::NeutralOut{});
     }
 
-        auto &pos1 = cancoder1.GetPosition().getValueAsDouble();
-        auto &pos2 = cancoder2.GetPosition().getValueAsDouble();
-        double elevatorPosition = calculateElevatorPosition(pos1, pos2, gearRatio1, gearRatio2);
-        std::cout << "Elevator Position: " << elevatorPosition << std::endl;
+
 
 
 }
@@ -338,18 +313,25 @@ void UpLift::DisabledPeriodic()
 
 int main()
 {
-      // Sample encoder values (between 0 and 1)
-    double encoder1 = 0.75;
-    double encoder2 = 0.45;
-    int gearRatio1 = 9;
-    int gearRatio2 = 37;
+ // Given encoder readings
+    double encoder1 = 0.122179; // 32-tooth gear
+    double encoder2 = 0.92079; // 39-tooth gear
 
+    // Gear teeth
+    int teeth1 = 32;
+    int teeth2 = 39;
 
-    // Calculate the elevator position
-    double elevatorPosition = calculateElevatorPosition(encoder1, encoder2, gearRatio1, gearRatio2);
+    // Maximum number of rotations to consider
+    int maxRotations = 100;
 
-    // Output the calculated position
-    std::cout << "Elevator Position: " << elevatorPosition << std::endl;
+    // Calculate the closest position for the 32-tooth gear
+    double closestPosition = calculateClosestPosition(encoder1, encoder2, teeth1, teeth2, maxRotations);
+
+    // Output the result
+    std::cout << "The closest position for the 32-tooth gear is " << closestPosition * 9.0 << " turns." << std::endl;
+
+    return 0;
+
 
 
 
