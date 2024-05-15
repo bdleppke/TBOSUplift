@@ -1,5 +1,5 @@
 
-/*
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <cpprest/http_listener.h>
@@ -31,13 +31,13 @@ void respond(const http_request& request, const status_code& status, const json:
 
 	// Pack in the current time for debugging purposes.
 	time_t now = time(0);
-	utility::stringstream_t ss;
-	ss << put_time(localtime(&now), L"%Y-%m-%dT%H:%S:%MZ");
-	resp[U("server_time")] = json::value::string(ss.str());
+	//utility::stringstream_t ss;
+	//ss << put_time(localtime(&now), L"%Y-%m-%dT%H:%S:%MZ");
+	resp[U("server_time")] = json::value::string("hello");
 
 	request.reply(status, resp);
 }
-*/
+
 #include <iostream>		// Include all needed libraries here
 #include <pigpio.h>
 #include <cmath>
@@ -330,7 +330,7 @@ int main()
     // Output the result
     std::cout << "The closest position for the 32-tooth gear is " << closestPosition * 9.0 << " turns." << std::endl;
 
-    return 0;
+    //return 0;
 
 
 
@@ -349,12 +349,12 @@ int main()
 
     /* create and run uplift */
     UpLift uplift{};
-    return uplift.Run();
+   // return uplift.Run();
     // uplift.SetLoopTime(20_ms); // optionally change loop time for periodic calls
 	// Synchronously bind the listener to all nics.
-	/*
+	
   uclog << U("Starting listener.") << endl;
-	http_listener listener(U("http://localhost/json"));
+	http_listener listener(U("http://localhost:8080/json"));
 	listener.open().wait();
 
 	// Handle incoming requests.
@@ -385,5 +385,5 @@ uplift.Run();
 	uclog << U("Terminating JSON listener.") << endl;
 	listener.close();
 	return 0;
-  */
+  
 }
