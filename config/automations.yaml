@@ -1,0 +1,8 @@
+  - alias: Send Numbers on Change
+    trigger:
+      - platform: state
+        entity_id: input_number.cab_level
+      - platform: state
+        entity_id: input_number.tailgate_level
+    action:
+      service: rest_command.send_numbers

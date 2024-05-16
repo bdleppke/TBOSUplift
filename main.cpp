@@ -354,27 +354,57 @@ int main()
 	// Synchronously bind the listener to all nics.
 	
   uclog << U("Starting listener.") << endl;
-	http_listener listener(U("http://localhost:8080/json"));
+	http_listener listener(U("http://localhost:8080"));
 	listener.open().wait();
 
 	// Handle incoming requests.
 	uclog << U("Setting up JSON listener.") << endl;
-	listener.support(methods::GET, [] (http_request req) {
-		auto http_get_vars = uri::split_query(req.request_uri().query());
 
-		auto found_name = http_get_vars.find(U("request"));
 
-		if (found_name == end(http_get_vars)) {
-			auto err = U("Request received with get var \"request\" omitted from query.");
-			uclog << err << endl;
-			respond(req, status_codes::BadRequest, json::value::string(err));
-			return;
-		}
+	listener.support(methods::GET, [] (http_request request) {
+		
+ // Extract query parameters
+        auto query_params = uri::split_query(request.request_uri().query());
 
-		auto request_name = found_name->second;
-		uclog << U("Received request: ") << request_name << endl;
-		respond(req, status_codes::OK, json::value::string(U("Request received for: ") + request_name));
-	});
+        auto found_cab = query_params.find(U("cab"));
+        auto found_tail = query_params.find(U("tail"));
+
+        // Check if number1 and number2 are present
+        if (found_cab == end(query_params) || found_tail == end(query_params)) {
+            request.reply(status_codes::BadRequest, U("Both cab and tail are required."));
+            return;
+        }
+
+        // Convert query parameters to integers
+        int cab, tail;
+        try {
+            cab = std::stoi(query_params[U("cab")]);
+            tail = std::stoi(query_params[U("tail")]);
+        } catch (const std::invalid_argument&) {
+            request.reply(status_codes::BadRequest, U("Invalid integer values for cab or tail."));
+            return;
+        }
+
+        // Check if values are within the valid range
+        if (cab < 0 || cab > 100 || tail < 0 || tail > 100) {
+            request.reply(status_codes::BadRequest, U("Both numbers must be between 0 and 100."));
+            return;
+        }
+
+        // Process the numbers (you can add your logic here)
+        int sum = cab + tail;
+            std::cout << "Received tail" << tail << " cab" << cab << std::endl;
+
+        // Create a JSON response
+        json::value response;
+        response[U("result")] = json::value::number(sum);
+
+        // Send the response
+        request.reply(status_codes::OK, response);
+    });
+
+
+
 
 	// Wait while the listener does the heavy lifting.
 	// TODO: Provide a way to safely terminate this loop.
