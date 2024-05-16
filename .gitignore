@@ -37,3 +37,5 @@ config/.HA_VERSION
 config/blueprints/automation/homeassistant/motion_light.yaml
 config/blueprints/script/homeassistant/confirmable_notification.yaml
 config/blueprints/automation/homeassistant/notify_leaving_zone.yaml
+config/.storage/lovelace
+config/.storage/lovelace.dashboard_uplift

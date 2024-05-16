@@ -1,8 +1,28 @@
-  - alias: Send Numbers on Change
-    trigger:
-      - platform: state
-        entity_id: input_number.cab_level
-      - platform: state
-        entity_id: input_number.tailgate_level
-    action:
-      service: rest_command.send_numbers
+- alias: Send Numbers on Change
+  trigger:
+  - platform: state
+    entity_id: input_number.cab_level
+  - platform: state
+    entity_id: input_number.tailgate_level
+  action:
+    service: rest_command.send_numbers
+  mode: queued
+  id: 0fa22479d26145df8c5d0d3734da1154
+- id: '1715831239034'
+  alias: updown
+  description: ''
+  trigger:
+  - platform: state
+    entity_id:
+    - input_number.truckbed_level
+  condition: []
+  action:
+  - service: input_number.set_value
+    metadata: {}
+    data:
+      value: "{{states('input_number.truckbed_level')| int}}"
+    target:
+      entity_id:
+      - input_number.cab_level
+      - input_number.tailgate_level
+  mode: queued
