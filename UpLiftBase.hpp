@@ -12,6 +12,7 @@ class UpLiftBase {
 public:
     virtual void UpLiftInit() = 0;
     virtual void UpLiftPeriodic() = 0;
+   // virtual void SetPositionFrom0To100(double cab, double tail) = 0;
 
     virtual bool IsEnabled() = 0;
     virtual void EnabledInit() = 0;

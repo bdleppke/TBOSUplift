@@ -23,7 +23,7 @@ using namespace std;
 using namespace web::http::experimental::listener;
 using namespace web::http;
 using namespace web;
-using namespace ctre::phoenix6;
+
 
 #include <iostream> // Include all needed libraries here
 #include <pigpio.h>
@@ -39,6 +39,7 @@ using namespace std; // No need to keep using “std”
 // #include "Joystick.hpp"
 
 #include <ctre/phoenix6/CANcoder.hpp>
+using namespace ctre::phoenix6;
 
 
 /**
@@ -49,7 +50,9 @@ class UpLift : public UpLiftBase
 private:
   /* This can be a CANivore name, CANivore serial number,*
    * SocketCAN interface, or "*" to select any CANivore. */
-  static constexpr char const *CANBUS_NAME = "can0";
+
+  // Gear ratios for the encoders
+      static constexpr char const *CANBUS_NAME = "can0";
 
   /* devices */
   hardware::TalonFX driverCabLeader{0, CANBUS_NAME};
@@ -70,7 +73,6 @@ private:
   bool buttonpressed = false;
   double maxlift = -877;
   int callCount = 0;
-  // Gear ratios for the encoders
 
 public:
   /* main uplift interface */
@@ -83,6 +85,18 @@ public:
 
   void DisabledInit() override;
   void DisabledPeriodic() override;
+  void SetPositionFrom0To100(double cab, double tail) {
+        double cabSetting = cab * maxlift /100;
+        double tailSetting = cab * maxlift /100;
+        driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting* 1_tr).WithSlot(0));
+        driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting* 1_tr).WithSlot(0));
+        passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting* 1_tr).WithSlot(0));
+        passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting* 1_tr).WithSlot(0));
+  }
+  
+
+
+
 };
 
 // Function to calculate the closest position
@@ -229,6 +243,8 @@ void UpLift::UpLiftInit()
   gpioInitialise();
 }
 
+
+
 /**
  * Runs periodically during program execution.
  */
@@ -250,6 +266,8 @@ bool UpLift::IsEnabled()
  * Runs when transitioning from disabled to enabled.
  */
 void UpLift::EnabledInit() {}
+
+
 
 /**
  * Runs periodically while enabled.
@@ -345,25 +363,7 @@ void UpLift::DisabledPeriodic()
 
 int main()
 {
-  // Given encoder readings
-  double encoder1 = 0.122179; // 32-tooth gear
-  double encoder2 = 0.92079;  // 39-tooth gear
 
-  // Gear teeth
-  int teeth1 = 32;
-  int teeth2 = 39;
-
-  // Maximum number of rotations to consider.  
-  int maxRotations = 98;
-
-  // Calculate the number of turns of the 32 tooth gear that gives the closest value of what the encoder on the 39 tooth gear is reading
-  // e.g. if the 32 tooth gear encoder reads .1, check .1, 1.1, 2.1, 3.1 ... maxRotations.1  and find the value of the 39 tooth gear encoder that is closest
-  double closestPosition = calculateClosestPosition(encoder1, encoder2, teeth1, teeth2, maxRotations);
-
-  // Output the result
-  std::cout << "The closest position for the 32-tooth gear is " << closestPosition * 9.0 << " turns." << std::endl;
-
-  // return 0;
 
   gpioInitialise();
   gpioSetMode(22, PI_INPUT);
@@ -389,7 +389,7 @@ int main()
   // Handle incoming requests.
   uclog << U("Setting up JSON listener.") << endl;
 
-  listener.support(methods::GET, [](http_request request)
+  listener.support(methods::GET, [&](http_request request)
                    {
 		
  // Extract query parameters
@@ -420,12 +420,9 @@ int main()
             return;
         }
 
-        double cabSetting = cab * maxlift /100;
-        double tailSetting = cab * maxlift /100;
-        driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting* 1_tr).WithSlot(0));
-        driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting* 1_tr).WithSlot(0));
-        passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting* 1_tr).WithSlot(0));
-        passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting* 1_tr).WithSlot(0));
+
+
+        uplift.SetPositionFrom0To100(cab,tail);
 
 
 
