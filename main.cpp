@@ -23,6 +23,7 @@ using namespace std;
 using namespace web::http::experimental::listener;
 using namespace web::http;
 using namespace web;
+using namespace ctre::phoenix6;
 
 #include <iostream> // Include all needed libraries here
 #include <pigpio.h>
@@ -30,16 +31,15 @@ using namespace web;
 #include <limits>
 
 using namespace std; // No need to keep using “std”
-#include "ctre/phoenixpro/sensors/CANCoder.hpp"
-#include "ctre/phoenixpro/sensors/CANCoderConfiguration.hpp"
-#include "ctre/phoenixpro/signals/AbsoluteSensorRangeValue.hpp"
+#include "ctre/phoenix6/CANcoder.hpp"
+//#include "ctre/phoenix6/configs/CANcoderConfiguration.hpp"
+//#include "ctre/phoenix6/signals/AbsoluteSensorRangeValue.hpp"
 #include "ctre/phoenix6/TalonFX.hpp"
 #include "UpLiftBase.hpp"
 // #include "Joystick.hpp"
 
 #include <ctre/phoenix6/CANcoder.hpp>
 
-using namespace ctre::phoenix6;
 
 /**
  * This is the main uplift class
@@ -121,30 +121,30 @@ double calculateClosestPosition(double encoder1, double encoder2, int teeth1, in
 void UpLift::UpLiftInit()
 {
 
-  ctre::phoenixpro::sensors::CANCoderConfiguration config;
-  config.AbsoluteSensorRange = ctre::phoenixpro::signals::AbsoluteSensorRangeValue::Unsigned_0To1;
-  config.MagnetOffset = 0.0;
+  ctre::phoenix6::configs::CANcoderConfiguration config{};
+  config.MagnetSensor.AbsoluteSensorRange =ctre::phoenix6::signals::AbsoluteSensorRangeValue::Unsigned_0To1;
+  config.MagnetSensor.MagnetOffset = 0.0;
   cancoder1.GetConfigurator().Apply(config);
 
-  config.MagnetOffset = 0.0;
+  config.MagnetSensor.MagnetOffset = 0.0;
   cancoder2.GetConfigurator().Apply(config);
 
-  config.MagnetOffset = 0.0;
+  config.MagnetSensor.MagnetOffset = 0.0;
   cancoder3.GetConfigurator().Apply(config);
 
-  config.MagnetOffset = 0.0;
+  config.MagnetSensor.MagnetOffset = 0.0;
   cancoder4.GetConfigurator().Apply(config);
 
-  config.MagnetOffset = 0.0;
+  config.MagnetSensor.MagnetOffset = 0.0;
   cancoder5.GetConfigurator().Apply(config);
 
-  config.MagnetOffset = 0.0;
+  config.MagnetSensor.MagnetOffset = 0.0;
   cancoder6.GetConfigurator().Apply(config);
 
-  config.MagnetOffset = 0.0;
+  config.MagnetSensor.MagnetOffset = 0.0;
   cancoder7.GetConfigurator().Apply(config);
 
-  config.MagnetOffset = 0.0;
+  config.MagnetSensor.MagnetOffset = 0.0;
   cancoder8.GetConfigurator().Apply(config);
   
   /* Speed up signals to an appropriate rate */
