@@ -327,14 +327,14 @@ void UpLift::EnabledPeriodic()
     // Maximum number of rotations to consider
     int maxRotations = 98;
     // Get the current absolute position from the CANCoder
-    double encoder5 = cancoder5.GetAbsolutePosition().GetValueAsDouble();
+    double encoder5 = -cancoder5.GetAbsolutePosition().GetValueAsDouble();
 
     // Get the current absolute position from the CANCoder
-    double encoder6 = cancoder6.GetAbsolutePosition().GetValueAsDouble();
+    double encoder6 = -cancoder6.GetAbsolutePosition().GetValueAsDouble();
 
 
     // Calculate the closest position for the 32-tooth gear
-    double crtPosition = 9.0 * calculateClosestPosition(encoder5, encoder6, teeth1, teeth2, maxRotations);
+    double crtPosition = -9.0 * calculateClosestPosition(encoder5, encoder6, teeth1, teeth2, maxRotations);
     double position = driverTailLeader.GetPosition().GetValueAsDouble();
 
     // Print the encoder position
