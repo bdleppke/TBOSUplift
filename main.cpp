@@ -87,7 +87,8 @@ public:
   void DisabledPeriodic() override;
   void SetPositionFrom0To100(double cab, double tail) {
         double cabSetting = cab * maxlift /100;
-        double tailSetting = cab * maxlift /100;
+        double tailSetting = tail * maxlift /100;
+        ::cout << "Processingtail" << tailSetting << " cab" << cabSetting << std::endl;
         driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting* 1_tr).WithSlot(0));
         driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting* 1_tr).WithSlot(0));
         passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting* 1_tr).WithSlot(0));
@@ -308,8 +309,9 @@ void UpLift::EnabledPeriodic()
     passengerTailFollower.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     buttonpressed = true;
   }
-  else if (buttonpressed = true)
+  else if (buttonpressed == true)
   {
+    ::cout << "Clearing buttonpressed" << std::endl;
     buttonpressed = false;
     driverCabLeader.SetControl(controls::NeutralOut{});
     driverTailLeader.SetControl(controls::NeutralOut{});
