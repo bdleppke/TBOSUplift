@@ -4,7 +4,9 @@
 
 #include <cpprest/http_listener.h>
 #include <iostream>
+#include <fstream>
 #include <iomanip>
+#include <string>
 #include <sstream>
 #include <thread>
 #include <chrono>
@@ -24,7 +26,6 @@ using namespace web::http::experimental::listener;
 using namespace web::http;
 using namespace web;
 
-
 #include <iostream> // Include all needed libraries here
 #include <pigpio.h>
 #include <cmath>
@@ -32,15 +33,14 @@ using namespace web;
 
 using namespace std; // No need to keep using “std”
 #include "ctre/phoenix6/CANcoder.hpp"
-//#include "ctre/phoenix6/configs/CANcoderConfiguration.hpp"
-//#include "ctre/phoenix6/signals/AbsoluteSensorRangeValue.hpp"
+// #include "ctre/phoenix6/configs/CANcoderConfiguration.hpp"
+// #include "ctre/phoenix6/signals/AbsoluteSensorRangeValue.hpp"
 #include "ctre/phoenix6/TalonFX.hpp"
 #include "UpLiftBase.hpp"
 // #include "Joystick.hpp"
 
 #include <ctre/phoenix6/CANcoder.hpp>
 using namespace ctre::phoenix6;
-
 
 /**
  * This is the main uplift class
@@ -52,7 +52,7 @@ private:
    * SocketCAN interface, or "*" to select any CANivore. */
 
   // Gear ratios for the encoders
-      static constexpr char const *CANBUS_NAME = "can0";
+  static constexpr char const *CANBUS_NAME = "can0";
 
   /* devices */
   hardware::TalonFX driverCabLeader{0, CANBUS_NAME};
@@ -69,6 +69,9 @@ private:
   hardware::CANcoder cancoder8{8, CANBUS_NAME};
 
   ctre::phoenix6::controls::MotionMagicVoltage m_mmReq{0_tr};
+  std::ofstream towerPositionsStream;
+
+  const std::string towerPositionsFile = "towerPositions.txt";
 
   bool buttonpressed = false;
   double maxlift = -877;
@@ -85,19 +88,16 @@ public:
 
   void DisabledInit() override;
   void DisabledPeriodic() override;
-  void SetPositionFrom0To100(double cab, double tail) {
-        double cabSetting = cab * maxlift /100;
-        double tailSetting = tail * maxlift /100;
-        ::cout << "Processingtail" << tailSetting << " cab" << cabSetting << std::endl;
-        driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting* 1_tr).WithSlot(0));
-        driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting* 1_tr).WithSlot(0));
-        passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting* 1_tr).WithSlot(0));
-        passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting* 1_tr).WithSlot(0));
+  void SetPositionFrom0To100(double cab, double tail)
+  {
+    double cabSetting = cab * maxlift / 100;
+    double tailSetting = tail * maxlift / 100;
+    ::cout << "Processingtail" << tailSetting << " cab" << cabSetting << std::endl;
+    driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0));
+    driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0));
+    passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0));
+    passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0));
   }
-  
-
-
-
 };
 
 // Function to calculate the closest position
@@ -137,7 +137,7 @@ void UpLift::UpLiftInit()
 {
 
   ctre::phoenix6::configs::CANcoderConfiguration config{};
-  config.MagnetSensor.AbsoluteSensorRange =ctre::phoenix6::signals::AbsoluteSensorRangeValue::Unsigned_0To1;
+  config.MagnetSensor.AbsoluteSensorRange = ctre::phoenix6::signals::AbsoluteSensorRangeValue::Unsigned_0To1;
   config.MagnetSensor.MagnetOffset = 0.0;
   cancoder1.GetConfigurator().Apply(config);
 
@@ -180,8 +180,8 @@ void UpLift::UpLiftInit()
   configs::TalonFXConfiguration cfg{};
 
   configs::MotionMagicConfigs &mm = cfg.MotionMagic;
-  mm.MotionMagicCruiseVelocity = 90; 
-  mm.MotionMagicAcceleration = 200;  
+  mm.MotionMagicCruiseVelocity = 90;
+  mm.MotionMagicAcceleration = 200;
   mm.MotionMagicJerk = 0;
 
   configs::Slot0Configs &slot0 = cfg.Slot0;
@@ -247,16 +247,48 @@ void UpLift::UpLiftInit()
   }
 
   gpioInitialise();
+
+  double driverCabFromFile = 0.0;
+  double driverTailFromFile = 0.0;
+  double passengerCabFromFile = 0.0;
+  double passengerTailFromFile = 0.0;
+
+  // Open the file for reading
+  std::ifstream infile(towerPositionsFile);
+  if (infile.is_open())
+  {
+    infile >> driverCabFromFile >> driverTailfFromFile >> passengerCabFromFile >> passengerTailFromFile;
+    infile.close();
+  }
+  else
+  {
+    std::cerr << "File not found. Starting with counter at 0.0." << std::endl;
+  }
+
+  std::cout << "Driver Cab File: " << driverCabFromFile << "Actual: " << driverCabLeader.GetPosition().GetValueAsDouble() << std::endl;
+  std::cout << "Driver Tail File: " << driverTailFromFile << "Actual: " << driverTailLeader.GetPosition().GetValueAsDouble() << std::endl;
+  std::cout << "Passenger Cab File: " << passengerCabFromFile << "Actual: " << passengerCabFollower.GetPosition().GetValueAsDouble() << std::endl;
+  std::cout << "Passenger Tail File: " << passengerTailFromFile << "Actual: " << passengerTailFollower.GetPosition().GetValueAsDouble() << std::endl;
+
+  /*
+    driverCabLeader.setPosition(driverCabFromFile);
+    driverTailLeader.setPosition(driverTailFromFile);
+    passengerCabFollower.setPosition(passengerCabFollower);
+    passengerTailFollower.setPosition(passengerTailFollower);
+  */
+
+  towerPositionsStream.open(towerPositonsFile, std::ios::trunc);
+  if (!towerPositionsStream.is_open())
+  {
+    std::cerr << "Unable to open towerPositions file for writing." << std::endl;
+  }
 }
-
-
 
 /**
  * Runs periodically during program execution.
  */
 void UpLift::UpLiftPeriodic()
 {
-
 }
 
 /**
@@ -272,8 +304,6 @@ bool UpLift::IsEnabled()
  * Runs when transitioning from disabled to enabled.
  */
 void UpLift::EnabledInit() {}
-
-
 
 /**
  * Runs periodically while enabled.
@@ -323,6 +353,14 @@ void UpLift::EnabledPeriodic()
     passengerCabFollower.SetControl(controls::NeutralOut{});
     passengerTailFollower.SetControl(controls::NeutralOut{});
   }
+
+  towerPositionsStream.seekp(0);
+  towerPositionsStream << std::fixed << std::setprecision(10) << driverCabLeader.GetPosition().GetValueAsDouble() << " " <<
+                                                                 driverTailLeader.GetPosition().GetValueAsDouble() << " " <<
+                                                                 passengerCabFollower.GetPosition().GetValueAsDouble() << " " << 
+                                                                 passengerTailFollower.GetPosition().GetValueAsDouble();
+  driverCabOutFile.flush();
+
   callCount++;
   if (callCount == 50)
   {
@@ -332,13 +370,12 @@ void UpLift::EnabledPeriodic()
     int teeth2 = 39;
 
     // Maximum number of rotations to consider
-    int maxRotations = 50;
+    int maxRotations = 38;
     // Get the current absolute position from the CANCoder
     double encoder5 = -(cancoder5.GetAbsolutePosition().GetValueAsDouble() - 0.744629);
 
     // Get the current absolute position from the CANCoder
     double encoder6 = -(cancoder6.GetAbsolutePosition().GetValueAsDouble() - 0.327148);
-
 
     // Calculate the closest position for the 32-tooth gear
     double crtPosition = -9.0 * calculateClosestPosition(encoder5, encoder6, teeth1, teeth2, maxRotations);
@@ -370,7 +407,6 @@ void UpLift::DisabledPeriodic()
 
 int main()
 {
-
 
   gpioInitialise();
   gpioSetMode(22, PI_INPUT);
@@ -427,11 +463,7 @@ int main()
             return;
         }
 
-
-
         uplift.SetPositionFrom0To100(cab,tail);
-
-
 
         // Process the numbers (you can add your logic here)
         int sum = cab + tail;
