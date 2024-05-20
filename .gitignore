@@ -39,3 +39,5 @@ config/blueprints/script/homeassistant/confirmable_notification.yaml
 config/blueprints/automation/homeassistant/notify_leaving_zone.yaml
 config/.storage/lovelace
 config/.storage/lovelace.dashboard_uplift
+towerPositions.txt
+temp

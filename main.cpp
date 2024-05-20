@@ -257,7 +257,7 @@ void UpLift::UpLiftInit()
   std::ifstream infile(towerPositionsFile);
   if (infile.is_open())
   {
-    infile >> driverCabFromFile >> driverTailfFromFile >> passengerCabFromFile >> passengerTailFromFile;
+    infile >> driverCabFromFile >> driverTailFromFile >> passengerCabFromFile >> passengerTailFromFile;
     infile.close();
   }
   else
@@ -270,14 +270,14 @@ void UpLift::UpLiftInit()
   std::cout << "Passenger Cab File: " << passengerCabFromFile << "Actual: " << passengerCabFollower.GetPosition().GetValueAsDouble() << std::endl;
   std::cout << "Passenger Tail File: " << passengerTailFromFile << "Actual: " << passengerTailFollower.GetPosition().GetValueAsDouble() << std::endl;
 
-  /*
-    driverCabLeader.setPosition(driverCabFromFile);
-    driverTailLeader.setPosition(driverTailFromFile);
-    passengerCabFollower.setPosition(passengerCabFollower);
-    passengerTailFollower.setPosition(passengerTailFollower);
-  */
+  
+    driverCabLeader.SetPosition(driverCabFromFile * 1_tr);
+    driverTailLeader.SetPosition(driverTailFromFile * 1_tr);
+    passengerCabFollower.SetPosition(passengerCabFromFile * 1_tr);
+    passengerTailFollower.SetPosition(passengerTailFromFile * 1_tr);
+  
 
-  towerPositionsStream.open(towerPositonsFile, std::ios::trunc);
+  towerPositionsStream.open(towerPositionsFile, std::ios::trunc);
   if (!towerPositionsStream.is_open())
   {
     std::cerr << "Unable to open towerPositions file for writing." << std::endl;
@@ -359,7 +359,7 @@ void UpLift::EnabledPeriodic()
                                                                  driverTailLeader.GetPosition().GetValueAsDouble() << " " <<
                                                                  passengerCabFollower.GetPosition().GetValueAsDouble() << " " << 
                                                                  passengerTailFollower.GetPosition().GetValueAsDouble();
-  driverCabOutFile.flush();
+  towerPositionsStream.flush();
 
   callCount++;
   if (callCount == 50)
