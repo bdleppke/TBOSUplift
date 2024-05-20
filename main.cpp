@@ -110,7 +110,7 @@ double calculateClosestPosition(double encoder1, double encoder2, int teeth1, in
   for (int i = 0; i <= maxRotations; ++i)
   {
     // Calculate the position of the 32-tooth gear
-    double position1 = i + encoder1;
+    double position1 = i -1 + encoder1;
 
     // Calculate the corresponding position of the 39-tooth gear
     double position2 = position1 * teeth1 / teeth2;
@@ -150,7 +150,7 @@ void UpLift::UpLiftInit()
   config.MagnetSensor.MagnetOffset = 0.0;
   cancoder4.GetConfigurator().Apply(config);
 
-  config.MagnetSensor.MagnetOffset = 0.0;
+  config.MagnetSensor.MagnetOffset =0.0;
   cancoder5.GetConfigurator().Apply(config);
 
   config.MagnetSensor.MagnetOffset = 0.0;
@@ -161,6 +161,11 @@ void UpLift::UpLiftInit()
 
   config.MagnetSensor.MagnetOffset = 0.0;
   cancoder8.GetConfigurator().Apply(config);
+
+
+
+
+
   
   /* Speed up signals to an appropriate rate */
   cancoder1.GetPosition().SetUpdateFrequency(100_Hz);
@@ -327,12 +332,12 @@ void UpLift::EnabledPeriodic()
     int teeth2 = 39;
 
     // Maximum number of rotations to consider
-    int maxRotations = 98;
+    int maxRotations = 50;
     // Get the current absolute position from the CANCoder
-    double encoder5 = -cancoder5.GetAbsolutePosition().GetValueAsDouble();
+    double encoder5 = -(cancoder5.GetAbsolutePosition().GetValueAsDouble() - 0.744629);
 
     // Get the current absolute position from the CANCoder
-    double encoder6 = -cancoder6.GetAbsolutePosition().GetValueAsDouble();
+    double encoder6 = -(cancoder6.GetAbsolutePosition().GetValueAsDouble() - 0.327148);
 
 
     // Calculate the closest position for the 32-tooth gear
@@ -340,7 +345,7 @@ void UpLift::EnabledPeriodic()
     double position = driverTailLeader.GetPosition().GetValueAsDouble();
 
     // Print the encoder position
-    std::cout << "Encoder position: " << position << " CRT position" << crtPosition << std::endl;
+    std::cout << "Cancoder5:" << encoder5 << "Cancoder6:" << encoder6 << "Encoder position: " << position << " CRT position" << crtPosition << std::endl;
 
     callCount = 0;
   }
