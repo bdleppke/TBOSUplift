@@ -59,6 +59,7 @@ private:
   hardware::TalonFX passengerCabFollower{1, CANBUS_NAME};
   hardware::TalonFX driverTailLeader{2, CANBUS_NAME};
   hardware::TalonFX passengerTailFollower{3, CANBUS_NAME};
+  /*
   hardware::CANcoder cancoder1{1, CANBUS_NAME}; // on 32 tooth
   hardware::CANcoder cancoder2{2, CANBUS_NAME}; // on 39 tooth
   hardware::CANcoder cancoder3{3, CANBUS_NAME};
@@ -67,7 +68,7 @@ private:
   hardware::CANcoder cancoder6{6, CANBUS_NAME};
   hardware::CANcoder cancoder7{7, CANBUS_NAME};
   hardware::CANcoder cancoder8{8, CANBUS_NAME};
-
+*/
   ctre::phoenix6::controls::MotionMagicVoltage m_mmReq{0_tr};
   std::ofstream towerPositionsStream;
 
@@ -135,7 +136,7 @@ double calculateClosestPosition(double encoder1, double encoder2, int teeth1, in
  */
 void UpLift::UpLiftInit()
 {
-
+/*
   ctre::phoenix6::configs::CANcoderConfiguration config{};
   config.MagnetSensor.AbsoluteSensorRange = ctre::phoenix6::signals::AbsoluteSensorRangeValue::Unsigned_0To1;
   config.MagnetSensor.MagnetOffset = 0.0;
@@ -167,7 +168,7 @@ void UpLift::UpLiftInit()
 
 
   
-  /* Speed up signals to an appropriate rate */
+
   cancoder1.GetPosition().SetUpdateFrequency(100_Hz);
   cancoder2.GetPosition().SetUpdateFrequency(100_Hz);
   cancoder3.GetPosition().SetUpdateFrequency(100_Hz);
@@ -176,7 +177,7 @@ void UpLift::UpLiftInit()
   cancoder6.GetPosition().SetUpdateFrequency(100_Hz);
   cancoder7.GetPosition().SetUpdateFrequency(100_Hz);
   cancoder8.GetPosition().SetUpdateFrequency(100_Hz);
-
+*/
   configs::TalonFXConfiguration cfg{};
 
   configs::MotionMagicConfigs &mm = cfg.MotionMagic;
@@ -311,8 +312,16 @@ void UpLift::EnabledInit() {}
 void UpLift::EnabledPeriodic()
 {
   gpioInitialise();
-
-  if (gpioRead(22) == 0) // all up
+17 down 
+27 Up
+22 twist
+23 twist
+24 shutdown
+  if (gpioRead(24) == 0) // shutdown
+  {
+    system("shutdown now")
+  }
+  if (gpioRead(27) == 0) // all up
   {
     driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
@@ -320,7 +329,7 @@ void UpLift::EnabledPeriodic()
     passengerTailFollower.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     buttonpressed = true;
   }
-  else if (gpioRead(23) == 0) // all down
+  else if (gpioRead(17) == 0) // all down
   {
     driverCabLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     driverTailLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
@@ -328,7 +337,7 @@ void UpLift::EnabledPeriodic()
     passengerTailFollower.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     buttonpressed = true;
   }
-  else if (gpioRead(5) == 0) // twist up
+  else if (gpioRead(22) == 0) // twist up
   {
     driverCabLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
@@ -336,7 +345,7 @@ void UpLift::EnabledPeriodic()
     passengerTailFollower.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     buttonpressed = true;
   }
-  else if (gpioRead(6) == 0) // twist down
+  else if (gpioRead(23) == 0) // twist down
   {
     driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     driverTailLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
@@ -360,7 +369,7 @@ void UpLift::EnabledPeriodic()
                                                                  passengerCabFollower.GetPosition().GetValueAsDouble() << " " << 
                                                                  passengerTailFollower.GetPosition().GetValueAsDouble();
   towerPositionsStream.flush();
-
+/*
   callCount++;
   if (callCount == 50)
   {
@@ -385,6 +394,7 @@ void UpLift::EnabledPeriodic()
     std::cout << "Cancoder5:" << encoder5 << "Cancoder6:" << encoder6 << "Encoder position: " << position << " CRT position" << crtPosition << std::endl;
 
     callCount = 0;
+    */
   }
 }
 
@@ -414,10 +424,13 @@ int main()
   gpioSetPullUpDown(22, PI_PUD_UP);
   gpioSetPullUpDown(23, PI_PUD_UP);
 
-  gpioSetMode(5, PI_INPUT);
-  gpioSetMode(6, PI_INPUT);
-  gpioSetPullUpDown(5, PI_PUD_UP);
-  gpioSetPullUpDown(6, PI_PUD_UP);
+  gpioSetMode(17, PI_INPUT);
+  gpioSetMode(27, PI_INPUT);
+  gpioSetPullUpDown(17, PI_PUD_UP);
+  gpioSetPullUpDown(27, PI_PUD_UP);
+
+  gpioSetMode(24, PI_INPUT);
+  gpioSetPullUpDown(24, PI_PUD_UP);
 
   /* create and run uplift */
   UpLift uplift{};
