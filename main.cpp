@@ -312,14 +312,10 @@ void UpLift::EnabledInit() {}
 void UpLift::EnabledPeriodic()
 {
   gpioInitialise();
-17 down 
-27 Up
-22 twist
-23 twist
-24 shutdown
+
   if (gpioRead(24) == 0) // shutdown
   {
-    system("shutdown now")
+    system("shutdown now");
   }
   if (gpioRead(27) == 0) // all up
   {
@@ -394,8 +390,9 @@ void UpLift::EnabledPeriodic()
     std::cout << "Cancoder5:" << encoder5 << "Cancoder6:" << encoder6 << "Encoder position: " << position << " CRT position" << crtPosition << std::endl;
 
     callCount = 0;
-    */
+    
   }
+  */
 }
 
 /**
