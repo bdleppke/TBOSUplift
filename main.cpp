@@ -317,7 +317,7 @@ void UpLift::EnabledPeriodic()
   {
     system("shutdown now");
   }
-  if (gpioRead(27) == 0) // all up
+  if (gpioRead(17) == 0) // all up
   {
     driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
@@ -325,7 +325,7 @@ void UpLift::EnabledPeriodic()
     passengerTailFollower.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     buttonpressed = true;
   }
-  else if (gpioRead(17) == 0) // all down
+  else if (gpioRead(27) == 0) // all down
   {
     driverCabLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     driverTailLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
