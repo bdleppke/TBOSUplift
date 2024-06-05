@@ -459,29 +459,36 @@ int main()
 
         // Convert query parameters to integers
         int cab, tail;
-        try {
-            cab = std::stoi(query_params[U("cab")]);
-            tail = std::stoi(query_params[U("tail")]);
+        try
+        {
+          cab = std::stoi(query_params[U("cab")]);
+          tail = std::stoi(query_params[U("tail")]);
+          // Check if values are within the valid range
+          if (cab >= 0 && cab <= 100 && tail >= 0 && tail <=> 100)
+          {
+            std::cout << "Received tail" << tail << " cab" << cab << std::endl;
+            uplift.SetPositionFrom0To100(cab, tail);
+          }
+        
+
         } catch (const std::invalid_argument&) {
-            request.reply(status_codes::BadRequest, U("Invalid integer values for cab or tail."));
-            return;
+            std::cout << "Just returning the current positions";
         }
 
-        // Check if values are within the valid range
-        if (cab < 0 || cab > 100 || tail < 0 || tail > 100) {
-            request.reply(status_codes::BadRequest, U("Both numbers must be between 0 and 100."));
-            return;
-        }
+        cab = (int) (100 * driverCabLeader.GetPosition()/maxlift) ;
+        tail = (int) (100 * driverTailLeader.GetPosition()/maxlift);
+  
 
-        uplift.SetPositionFrom0To100(cab,tail);
+      
 
         // Process the numbers (you can add your logic here)
-        int sum = cab + tail;
-            std::cout << "Received tail" << tail << " cab" << cab << std::endl;
+       
+            std::cout << "Sending tail" << tail << " cab" << cab << std::endl;
 
         // Create a JSON response
         json::value response;
-        response[U("result")] = json::value::number(sum);
+        response[U("cab")] = json::value::number(cab);
+        response[U("tail")] = json::value::number(tail);
 
         // Send the response
         request.reply(status_codes::OK, response); });
