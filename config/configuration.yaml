@@ -14,3 +14,21 @@ rest_command:
   send_numbers:
     url: "http://localhost:8080/?cab={{ states('input_number.cab_level') }}&tail={{ states('input_number.tailgate_level') }}"
     method: GET
+  set0:
+    url: "http://localhost:8080/?cab=0&tail=0"
+    method: GET
+  set50:
+    url: "http://localhost:8080/?cab=50&tail=50"
+    method: GET
+  set100:
+    url: "http://localhost:8080/?cab=100&tail=100"
+    method: GET
+
+rest:
+  - resource: "http://localhost:8080/"
+    scan_interval: 1
+    sensor:
+      - name: "tail"
+        value_template: "{{ value_json['tail']}}"
+      - name: "cab"
+        value_template: "{{ value_json['cab']}}"

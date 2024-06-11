@@ -99,6 +99,15 @@ public:
     passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0));
     passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0));
   }
+
+  int GetCab()
+  {
+    return (int) (driverCabLeader.GetPosition().GetValueAsDouble()*100/maxlift);
+  }
+  int GetTail()
+  {
+    return (int) (driverTailLeader.GetPosition().GetValueAsDouble()*100/maxlift);
+  }
 };
 
 // Function to calculate the closest position
@@ -450,21 +459,20 @@ int main()
 
         auto found_cab = query_params.find(U("cab"));
         auto found_tail = query_params.find(U("tail"));
+        int cab, tail;
 
         // Check if number1 and number2 are present
-        if (found_cab == end(query_params) || found_tail == end(query_params)) {
-            request.reply(status_codes::BadRequest, U("Both cab and tail are required."));
-            return;
-        }
+        if (!(found_cab == end(query_params)) && !(found_tail == end(query_params))) {
 
+      
         // Convert query parameters to integers
-        int cab, tail;
+        //int cab, tail;
         try
         {
           cab = std::stoi(query_params[U("cab")]);
           tail = std::stoi(query_params[U("tail")]);
           // Check if values are within the valid range
-          if (cab >= 0 && cab <= 100 && tail >= 0 && tail <=> 100)
+          if (cab >= 0 && cab <= 100 && tail >= 0 && tail <= 100)
           {
             std::cout << "Received tail" << tail << " cab" << cab << std::endl;
             uplift.SetPositionFrom0To100(cab, tail);
@@ -475,8 +483,14 @@ int main()
             std::cout << "Just returning the current positions";
         }
 
-        cab = (int) (100 * driverCabLeader.GetPosition()/maxlift) ;
-        tail = (int) (100 * driverTailLeader.GetPosition()/maxlift);
+        }
+
+
+        cab = uplift.GetCab() ;
+        tail = uplift.GetTail() ;
+
+      //  cab = 15;
+      // tail = 20;
   
 
       

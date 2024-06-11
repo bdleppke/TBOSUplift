@@ -1,0 +1,3 @@
+sudo nmcli dev wifi connect corncrib
+
+sudo nmcli dev wifi hotspot ssid "TBOS"
