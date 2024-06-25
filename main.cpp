@@ -75,6 +75,7 @@ private:
   const std::string towerPositionsFile = "towerPositions.txt";
 
   bool buttonpressed = false;
+  bool sendbuttoncommand = false;
   double maxlift = -877;
   int callCount = 0;
 
@@ -94,10 +95,22 @@ public:
     double cabSetting = cab * maxlift / 100;
     double tailSetting = tail * maxlift / 100;
     ::cout << "Processingtail" << tailSetting << " cab" << cabSetting << std::endl;
-    driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0));
-    driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0));
-    passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0));
-    passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0));
+    if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).isOK()) {
+       std::cout << "Could not set drivecab position: " << status.GetName() << std::endl;
+       return 1;
+    } 
+    if (!(driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).isOK())  {
+       std::cout << "Could not set drivetail position: " << status.GetName() << std::endl;
+       return 1;
+    } 
+    if (!(passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).isOK()) {
+       std::cout << "Could not set passenger cab position: " << status.GetName() << std::endl;
+       return 1;
+    } 
+    if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).isOK())  {
+       std::cout << "Could not set passenger tail position: " << status.GetName() << std::endl;
+       return 1;
+    } 
   }
 
   int GetCab()
@@ -215,6 +228,7 @@ void UpLift::UpLiftInit()
   if (!status.IsOK())
   {
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+    return 1;
   }
 
   cfg.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
@@ -228,6 +242,7 @@ void UpLift::UpLiftInit()
   if (!status.IsOK())
   {
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+    return 1;
   }
 
   cfg.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
@@ -241,6 +256,7 @@ void UpLift::UpLiftInit()
   if (!status.IsOK())
   {
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+    return 1;
   }
 
   cfg.MotorOutput.Inverted = signals::InvertedValue::CounterClockwise_Positive;
@@ -254,6 +270,7 @@ void UpLift::UpLiftInit()
   if (!status.IsOK())
   {
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+    return 1;
   }
 
   gpioInitialise();
@@ -268,6 +285,12 @@ void UpLift::UpLiftInit()
   if (infile.is_open())
   {
     infile >> driverCabFromFile >> driverTailFromFile >> passengerCabFromFile >> passengerTailFromFile;
+          if (infile.fail()) {
+        std::cerr << "Error reading from file tower Positions File "  std::endl;
+        // Optionally, you can close the file here
+ 
+        return 1;
+    }
     infile.close();
   }
   else
@@ -280,17 +303,66 @@ void UpLift::UpLiftInit()
   std::cout << "Passenger Cab File: " << passengerCabFromFile << "Actual: " << passengerCabFollower.GetPosition().GetValueAsDouble() << std::endl;
   std::cout << "Passenger Tail File: " << passengerTailFromFile << "Actual: " << passengerTailFollower.GetPosition().GetValueAsDouble() << std::endl;
 
+
+
+  status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  for (int i = 0; i < 5; ++i)
+  {
+    status = driverCabLeader.SetPosition(driverCabFromFile * 1_tr);
+    if (status.IsOK())
+      break;
+  }
+  if (!status.IsOK())
+  {
+    std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+    return 1;
+  }
   
-    driverCabLeader.SetPosition(driverCabFromFile * 1_tr);
-    driverTailLeader.SetPosition(driverTailFromFile * 1_tr);
-    passengerCabFollower.SetPosition(passengerCabFromFile * 1_tr);
-    passengerTailFollower.SetPosition(passengerTailFromFile * 1_tr);
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  for (int i = 0; i < 5; ++i)
+  {
+    status = driverTailLeader.SetPosition(driverTailFromFile * 1_tr);
+    if (status.IsOK())
+      break;
+  }
+  if (!status.IsOK())
+  {
+    std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+    return 1;
+  }
+  
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  for (int i = 0; i < 5; ++i)
+  {
+    status = passengerCabFollower.SetPosition(passengerCabFromFile * 1_tr);
+    if (status.IsOK())
+      break;
+  }
+  if (!status.IsOK())
+  {
+    std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+    return 1;
+  }
+  
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  for (int i = 0; i < 5; ++i)
+  {
+    status =  passengerTailFollower.SetPosition(passengerTailFromFile * 1_tr);
+    if (status.IsOK())
+      break;
+  }
+  if (!status.IsOK())
+  {
+    std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
+    return 1;
+  }
   
 
   towerPositionsStream.open(towerPositionsFile, std::ios::trunc);
   if (!towerPositionsStream.is_open())
   {
     std::cerr << "Unable to open towerPositions file for writing." << std::endl;
+    return 1;
   }
 }
 
@@ -328,44 +400,84 @@ void UpLift::EnabledPeriodic()
   }
   if (gpioRead(17) == 0) // all up
   {
-    driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    passengerCabFollower.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    passengerTailFollower.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+
+    auto dc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    auto dt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    auto pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    auto pt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     buttonpressed = true;
+    sendbuttoncommand = true;
   }
   else if (gpioRead(27) == 0) // all down
   {
-    driverCabLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    driverTailLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    passengerCabFollower.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    passengerTailFollower.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    auto dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    auto dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    auto pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    auto pt =(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     buttonpressed = true;
+    sendbuttoncommand = true;
   }
   else if (gpioRead(22) == 0) // twist up
   {
-    driverCabLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    driverTailLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    passengerCabFollower.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    passengerTailFollower.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    auto dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    auto dt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    auto pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    auto pt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     buttonpressed = true;
+    sendbuttoncommand = true;
   }
   else if (gpioRead(23) == 0) // twist down
   {
-    driverCabLeader.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    driverTailLeader.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    passengerCabFollower.SetControl(m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    passengerTailFollower.SetControl(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    auto dc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    auto dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    auto pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    auto pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     buttonpressed = true;
+    sendbuttoncommand = true;
   }
   else if (buttonpressed == true)
   {
     ::cout << "Clearing buttonpressed" << std::endl;
     buttonpressed = false;
-    driverCabLeader.SetControl(controls::NeutralOut{});
-    driverTailLeader.SetControl(controls::NeutralOut{});
-    passengerCabFollower.SetControl(controls::NeutralOut{});
-    passengerTailFollower.SetControl(controls::NeutralOut{});
+    auto dc = (controls::NeutralOut{});
+    auto dt = (controls::NeutralOut{});
+    auto pc = (controls::NeutralOut{});
+    auto pt = (controls::NeutralOut{});
+    sendbuttoncommand = true;
+  }
+
+  if (sendbuttoncommand == true)
+  {
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = driverCabLeader.SetControl(dc);
+    if (!status.IsOK())
+    {
+      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
+      return 1;
+    }
+        status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = driverTailLeader.SetControl(dt);
+    if (!status.IsOK())
+    {
+      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
+      return 1;
+    }
+        status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = passengerCabFollower.SetControl(pc);
+    if (!status.IsOK())
+    {
+      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
+      return 1;
+    }
+        status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = passengerTailFollower.SetControl(pt);
+    if (!status.IsOK())
+    {
+      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
+      return 1;
+    }
+
+    sendbuttoncommand = false;
   }
 
   towerPositionsStream.seekp(0);
@@ -374,6 +486,20 @@ void UpLift::EnabledPeriodic()
                                                                  passengerCabFollower.GetPosition().GetValueAsDouble() << " " << 
                                                                  passengerTailFollower.GetPosition().GetValueAsDouble();
   towerPositionsStream.flush();
+      if (towerPositionsStream.fail()) {
+        std::cerr << "Error writing to file: " << filePath << std::endl;
+        // Optionally, you can close the file here
+        towerPositionsStream.close();
+        return 1;
+    }
+
+if (!driverCableader.isAllGood() || !driverTailLeader.isAllGood() || !passengerCabFollower.isAllGood() || !passengerTailFollower.isAllGood()) {
+
+  std::cout << "Everything is not all good. Shutting down" << std::endl;
+  return 1;
+    
+}
+
 /*
   callCount++;
   if (callCount == 50)
@@ -417,6 +543,8 @@ void UpLift::DisabledPeriodic()
 {
   driverCabLeader.SetControl(controls::NeutralOut{});
   driverTailLeader.SetControl(controls::NeutralOut{});
+  passengerCabFollower.SetControl(controls::NeutralOut{});
+  passengerTailFollower.SetControl(controls::NeutralOut{});
 }
 
 /* ------ main function ------ */
