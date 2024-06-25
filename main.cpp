@@ -435,7 +435,7 @@ int UpLift::EnabledPeriodic()
     auto pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     auto pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     buttonpressed = true;
-    sendbuttoncommand = true;
+    sendbuttoncommand = true;is
   }
   else if (buttonpressed == true)
   {
@@ -451,6 +451,10 @@ int UpLift::EnabledPeriodic()
   if (sendbuttoncommand == true)
   {
     status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    dcstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    dtstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    pcstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    ptstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
     status = driverCabLeader.SetControl(dc);
     if (!status.IsOK())
     {
@@ -483,7 +487,7 @@ int UpLift::EnabledPeriodic()
   }
 
   towerPositionsStream.seekp(0);
-  towerPositionsStream << std::fixed << std::setprecision(10) << driverCabLeader.GetPosition().GetValueAsDouble() << " " << driverTailLeader.GetPosition().GetValueAsDouble() << " " << passengerCabFollower.GetPosition().GetValueAsDouble() << " " << passengerTailFollower.GetPosition().GetValueAsDouble();
+  towerPositionsStream << std::fixed << std::setprecision(10) << (dcstatus = driverCabLeader.GetPosition()).GetValueAsDouble() << " " << (dtstatus = driverTailLeader.GetPosition()).GetValueAsDouble() << " " << (pcstatus = passengerCabFollower.GetPosition()).GetValueAsDouble() << " " << (ptstatus = passengerTailFollower.GetPosition()).GetValueAsDouble();
   towerPositionsStream.flush();
   if (towerPositionsStream.fail())
   {
@@ -493,7 +497,7 @@ int UpLift::EnabledPeriodic()
     return 1;
   }
 
-  if (!driverCableader.isAllGood() || !driverTailLeader.isAllGood() || !passengerCabFollower.isAllGood() || !passengerTailFollower.isAllGood())
+  if (!dcstatus.IsOK() || !dtstatus.IsOK()|| !pcstatus.IsOK() || !ptstatus.IsOK())
   {
 
     std::cout << "Everything is not all good. Shutting down" << std::endl;
