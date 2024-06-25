@@ -41,3 +41,5 @@ config/.storage/lovelace
 config/.storage/lovelace.dashboard_uplift
 towerPositions.txt
 temp
+config/custom_components/
+

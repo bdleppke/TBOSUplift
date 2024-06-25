@@ -208,7 +208,7 @@ void UpLift::UpLiftInit()
   mm.MotionMagicJerk = 0;
 
   configs::Slot0Configs &slot0 = cfg.Slot0;
-  slot0.kP = 4.9;
+  slot0.kP = 4.5;
   slot0.kI = 0;
   slot0.kD = 0.0078125;
   slot0.kV = 0.009375;

@@ -17,8 +17,14 @@ rest_command:
   set0:
     url: "http://localhost:8080/?cab=0&tail=0"
     method: GET
+  set25:
+    url: "http://localhost:8080/?cab=25&tail=25"
+    method: GET
   set50:
     url: "http://localhost:8080/?cab=50&tail=50"
+    method: GET
+  set75:
+    url: "http://localhost:8080/?cab=75&tail=75"
     method: GET
   set100:
     url: "http://localhost:8080/?cab=100&tail=100"
@@ -32,3 +38,9 @@ rest:
         value_template: "{{ value_json['tail']}}"
       - name: "cab"
         value_template: "{{ value_json['cab']}}"
+command_line:
+     sensor:
+     -name: CPU Temperature
+     -command: "cat /sys/class/thermal/thermal_zone0/temp"
+     -unit_of_measurement: "°C"
+     -value_template: '{{ value | multiply(0.001) | round(1) }}'
