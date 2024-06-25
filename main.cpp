@@ -86,7 +86,7 @@ public:
 
   bool IsEnabled() override;
   void EnabledInit() override;
-  void EnabledPeriodic() override;
+  int EnabledPeriodic() override;
 
   void DisabledInit() override;
   void DisabledPeriodic() override;
@@ -95,31 +95,35 @@ public:
     double cabSetting = cab * maxlift / 100;
     double tailSetting = tail * maxlift / 100;
     ::cout << "Processingtail" << tailSetting << " cab" << cabSetting << std::endl;
-    if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).isOK()) {
-       std::cout << "Could not set drivecab position: " << status.GetName() << std::endl;
-       return 1;
-    } 
-    if (!(driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).isOK())  {
-       std::cout << "Could not set drivetail position: " << status.GetName() << std::endl;
-       return 1;
-    } 
-    if (!(passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).isOK()) {
-       std::cout << "Could not set passenger cab position: " << status.GetName() << std::endl;
-       return 1;
-    } 
-    if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).isOK())  {
-       std::cout << "Could not set passenger tail position: " << status.GetName() << std::endl;
-       return 1;
-    } 
+    if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).isOK())
+    {
+      std::cout << "Could not set drivecab position: " << status.GetName() << std::endl;
+      return 1;
+    }
+    if (!(driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).isOK())
+    {
+      std::cout << "Could not set drivetail position: " << status.GetName() << std::endl;
+      return 1;
+    }
+    if (!(passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).isOK())
+    {
+      std::cout << "Could not set passenger cab position: " << status.GetName() << std::endl;
+      return 1;
+    }
+    if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).isOK())
+    {
+      std::cout << "Could not set passenger tail position: " << status.GetName() << std::endl;
+      return 1;
+    }
   }
 
   int GetCab()
   {
-    return (int) (driverCabLeader.GetPosition().GetValueAsDouble()*100/maxlift);
+    return (int)(driverCabLeader.GetPosition().GetValueAsDouble() * 100 / maxlift);
   }
   int GetTail()
   {
-    return (int) (driverTailLeader.GetPosition().GetValueAsDouble()*100/maxlift);
+    return (int)(driverTailLeader.GetPosition().GetValueAsDouble() * 100 / maxlift);
   }
 };
 
@@ -133,7 +137,7 @@ double calculateClosestPosition(double encoder1, double encoder2, int teeth1, in
   for (int i = 0; i <= maxRotations; ++i)
   {
     // Calculate the position of the 32-tooth gear
-    double position1 = i -1 + encoder1;
+    double position1 = i - 1 + encoder1;
 
     // Calculate the corresponding position of the 39-tooth gear
     double position2 = position1 * teeth1 / teeth2;
@@ -158,48 +162,48 @@ double calculateClosestPosition(double encoder1, double encoder2, int teeth1, in
  */
 void UpLift::UpLiftInit()
 {
-/*
-  ctre::phoenix6::configs::CANcoderConfiguration config{};
-  config.MagnetSensor.AbsoluteSensorRange = ctre::phoenix6::signals::AbsoluteSensorRangeValue::Unsigned_0To1;
-  config.MagnetSensor.MagnetOffset = 0.0;
-  cancoder1.GetConfigurator().Apply(config);
+  /*
+    ctre::phoenix6::configs::CANcoderConfiguration config{};
+    config.MagnetSensor.AbsoluteSensorRange = ctre::phoenix6::signals::AbsoluteSensorRangeValue::Unsigned_0To1;
+    config.MagnetSensor.MagnetOffset = 0.0;
+    cancoder1.GetConfigurator().Apply(config);
 
-  config.MagnetSensor.MagnetOffset = 0.0;
-  cancoder2.GetConfigurator().Apply(config);
+    config.MagnetSensor.MagnetOffset = 0.0;
+    cancoder2.GetConfigurator().Apply(config);
 
-  config.MagnetSensor.MagnetOffset = 0.0;
-  cancoder3.GetConfigurator().Apply(config);
+    config.MagnetSensor.MagnetOffset = 0.0;
+    cancoder3.GetConfigurator().Apply(config);
 
-  config.MagnetSensor.MagnetOffset = 0.0;
-  cancoder4.GetConfigurator().Apply(config);
+    config.MagnetSensor.MagnetOffset = 0.0;
+    cancoder4.GetConfigurator().Apply(config);
 
-  config.MagnetSensor.MagnetOffset =0.0;
-  cancoder5.GetConfigurator().Apply(config);
+    config.MagnetSensor.MagnetOffset =0.0;
+    cancoder5.GetConfigurator().Apply(config);
 
-  config.MagnetSensor.MagnetOffset = 0.0;
-  cancoder6.GetConfigurator().Apply(config);
+    config.MagnetSensor.MagnetOffset = 0.0;
+    cancoder6.GetConfigurator().Apply(config);
 
-  config.MagnetSensor.MagnetOffset = 0.0;
-  cancoder7.GetConfigurator().Apply(config);
+    config.MagnetSensor.MagnetOffset = 0.0;
+    cancoder7.GetConfigurator().Apply(config);
 
-  config.MagnetSensor.MagnetOffset = 0.0;
-  cancoder8.GetConfigurator().Apply(config);
-
-
+    config.MagnetSensor.MagnetOffset = 0.0;
+    cancoder8.GetConfigurator().Apply(config);
 
 
 
-  
 
-  cancoder1.GetPosition().SetUpdateFrequency(100_Hz);
-  cancoder2.GetPosition().SetUpdateFrequency(100_Hz);
-  cancoder3.GetPosition().SetUpdateFrequency(100_Hz);
-  cancoder4.GetPosition().SetUpdateFrequency(100_Hz);
-  cancoder5.GetPosition().SetUpdateFrequency(100_Hz);
-  cancoder6.GetPosition().SetUpdateFrequency(100_Hz);
-  cancoder7.GetPosition().SetUpdateFrequency(100_Hz);
-  cancoder8.GetPosition().SetUpdateFrequency(100_Hz);
-*/
+
+
+
+    cancoder1.GetPosition().SetUpdateFrequency(100_Hz);
+    cancoder2.GetPosition().SetUpdateFrequency(100_Hz);
+    cancoder3.GetPosition().SetUpdateFrequency(100_Hz);
+    cancoder4.GetPosition().SetUpdateFrequency(100_Hz);
+    cancoder5.GetPosition().SetUpdateFrequency(100_Hz);
+    cancoder6.GetPosition().SetUpdateFrequency(100_Hz);
+    cancoder7.GetPosition().SetUpdateFrequency(100_Hz);
+    cancoder8.GetPosition().SetUpdateFrequency(100_Hz);
+  */
   configs::TalonFXConfiguration cfg{};
 
   configs::MotionMagicConfigs &mm = cfg.MotionMagic;
@@ -285,11 +289,12 @@ void UpLift::UpLiftInit()
   if (infile.is_open())
   {
     infile >> driverCabFromFile >> driverTailFromFile >> passengerCabFromFile >> passengerTailFromFile;
-          if (infile.fail()) {
-        std::cerr << "Error reading from file tower Positions File "  std::endl;
-        // Optionally, you can close the file here
- 
-        return 1;
+    if (infile.fail())
+    {
+      std::cerr << "Error reading from file tower Positions File " std::endl;
+      // Optionally, you can close the file here
+
+      return 1;
     }
     infile.close();
   }
@@ -303,8 +308,6 @@ void UpLift::UpLiftInit()
   std::cout << "Passenger Cab File: " << passengerCabFromFile << "Actual: " << passengerCabFollower.GetPosition().GetValueAsDouble() << std::endl;
   std::cout << "Passenger Tail File: " << passengerTailFromFile << "Actual: " << passengerTailFollower.GetPosition().GetValueAsDouble() << std::endl;
 
-
-
   status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for (int i = 0; i < 5; ++i)
   {
@@ -317,8 +320,8 @@ void UpLift::UpLiftInit()
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
     return 1;
   }
-  
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+
+  status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for (int i = 0; i < 5; ++i)
   {
     status = driverTailLeader.SetPosition(driverTailFromFile * 1_tr);
@@ -330,8 +333,8 @@ void UpLift::UpLiftInit()
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
     return 1;
   }
-  
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+
+  status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for (int i = 0; i < 5; ++i)
   {
     status = passengerCabFollower.SetPosition(passengerCabFromFile * 1_tr);
@@ -343,11 +346,11 @@ void UpLift::UpLiftInit()
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
     return 1;
   }
-  
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+
+  status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for (int i = 0; i < 5; ++i)
   {
-    status =  passengerTailFollower.SetPosition(passengerTailFromFile * 1_tr);
+    status = passengerTailFollower.SetPosition(passengerTailFromFile * 1_tr);
     if (status.IsOK())
       break;
   }
@@ -356,7 +359,6 @@ void UpLift::UpLiftInit()
     std::cout << "Could not configure device. Error: " << status.GetName() << std::endl;
     return 1;
   }
-  
 
   towerPositionsStream.open(towerPositionsFile, std::ios::trunc);
   if (!towerPositionsStream.is_open())
@@ -390,7 +392,7 @@ void UpLift::EnabledInit() {}
 /**
  * Runs periodically while enabled.
  */
-void UpLift::EnabledPeriodic()
+int UpLift::EnabledPeriodic()
 {
   gpioInitialise();
 
@@ -413,7 +415,7 @@ void UpLift::EnabledPeriodic()
     auto dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     auto dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     auto pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    auto pt =(m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    auto pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     buttonpressed = true;
     sendbuttoncommand = true;
   }
@@ -455,21 +457,21 @@ void UpLift::EnabledPeriodic()
       std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
       return 1;
     }
-        status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
     status = driverTailLeader.SetControl(dt);
     if (!status.IsOK())
     {
       std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
       return 1;
     }
-        status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
     status = passengerCabFollower.SetControl(pc);
     if (!status.IsOK())
     {
       std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
       return 1;
     }
-        status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
     status = passengerTailFollower.SetControl(pt);
     if (!status.IsOK())
     {
@@ -481,53 +483,53 @@ void UpLift::EnabledPeriodic()
   }
 
   towerPositionsStream.seekp(0);
-  towerPositionsStream << std::fixed << std::setprecision(10) << driverCabLeader.GetPosition().GetValueAsDouble() << " " <<
-                                                                 driverTailLeader.GetPosition().GetValueAsDouble() << " " <<
-                                                                 passengerCabFollower.GetPosition().GetValueAsDouble() << " " << 
-                                                                 passengerTailFollower.GetPosition().GetValueAsDouble();
+  towerPositionsStream << std::fixed << std::setprecision(10) << driverCabLeader.GetPosition().GetValueAsDouble() << " " << driverTailLeader.GetPosition().GetValueAsDouble() << " " << passengerCabFollower.GetPosition().GetValueAsDouble() << " " << passengerTailFollower.GetPosition().GetValueAsDouble();
   towerPositionsStream.flush();
-      if (towerPositionsStream.fail()) {
-        std::cerr << "Error writing to file: " << filePath << std::endl;
-        // Optionally, you can close the file here
-        towerPositionsStream.close();
-        return 1;
-    }
+  if (towerPositionsStream.fail())
+  {
+    std::cerr << "Error writing to file: " << filePath << std::endl;
+    // Optionally, you can close the file here
+    towerPositionsStream.close();
+    return 1;
+  }
 
-if (!driverCableader.isAllGood() || !driverTailLeader.isAllGood() || !passengerCabFollower.isAllGood() || !passengerTailFollower.isAllGood()) {
-
-  std::cout << "Everything is not all good. Shutting down" << std::endl;
-  return 1;
-    
-}
-
-/*
-  callCount++;
-  if (callCount == 50)
+  if (!driverCableader.isAllGood() || !driverTailLeader.isAllGood() || !passengerCabFollower.isAllGood() || !passengerTailFollower.isAllGood())
   {
 
-    // Gear teeth
-    int teeth1 = 32;
-    int teeth2 = 39;
-
-    // Maximum number of rotations to consider
-    int maxRotations = 38;
-    // Get the current absolute position from the CANCoder
-    double encoder5 = -(cancoder5.GetAbsolutePosition().GetValueAsDouble() - 0.744629);
-
-    // Get the current absolute position from the CANCoder
-    double encoder6 = -(cancoder6.GetAbsolutePosition().GetValueAsDouble() - 0.327148);
-
-    // Calculate the closest position for the 32-tooth gear
-    double crtPosition = -9.0 * calculateClosestPosition(encoder5, encoder6, teeth1, teeth2, maxRotations);
-    double position = driverTailLeader.GetPosition().GetValueAsDouble();
-
-    // Print the encoder position
-    std::cout << "Cancoder5:" << encoder5 << "Cancoder6:" << encoder6 << "Encoder position: " << position << " CRT position" << crtPosition << std::endl;
-
-    callCount = 0;
-    
+    std::cout << "Everything is not all good. Shutting down" << std::endl;
+    return 1;
   }
-  */
+
+  return 0;
+
+  /*
+    callCount++;
+    if (callCount == 50)
+    {
+
+      // Gear teeth
+      int teeth1 = 32;
+      int teeth2 = 39;
+
+      // Maximum number of rotations to consider
+      int maxRotations = 38;
+      // Get the current absolute position from the CANCoder
+      double encoder5 = -(cancoder5.GetAbsolutePosition().GetValueAsDouble() - 0.744629);
+
+      // Get the current absolute position from the CANCoder
+      double encoder6 = -(cancoder6.GetAbsolutePosition().GetValueAsDouble() - 0.327148);
+
+      // Calculate the closest position for the 32-tooth gear
+      double crtPosition = -9.0 * calculateClosestPosition(encoder5, encoder6, teeth1, teeth2, maxRotations);
+      double position = driverTailLeader.GetPosition().GetValueAsDouble();
+
+      // Print the encoder position
+      std::cout << "Cancoder5:" << encoder5 << "Cancoder6:" << encoder6 << "Encoder position: " << position << " CRT position" << crtPosition << std::endl;
+
+      callCount = 0;
+
+    }
+    */
 }
 
 /**

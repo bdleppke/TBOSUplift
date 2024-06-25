@@ -16,17 +16,18 @@ public:
 
     virtual bool IsEnabled() = 0;
     virtual void EnabledInit() = 0;
-    virtual void EnabledPeriodic() = 0;
+    virtual int EnabledPeriodic() = 0;
 
     virtual void DisabledInit() = 0;
     virtual void DisabledPeriodic() = 0;
 
 
-    virtual bool IsRunning() { return true; }
+   // virtual bool IsRunning() { return true; }
 
 private:
     units::millisecond_t _loopTime = 20_ms;
     int _lastEnabled = -1;
+    bool _isRunning = true;
 
 public:
     /**
@@ -44,6 +45,9 @@ public:
     {
         _loopTime = loopTime;
     }
+
+    bool IsRunning() { return _isRunning}
+
 
     /**
      * Runs the  program.

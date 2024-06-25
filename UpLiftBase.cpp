@@ -27,7 +27,7 @@ int UpLiftBase::Run()
             /* enable for 100 ms */
             ctre::phoenix::unmanaged::FeedEnable(100);
             /* run enabled periodic */
-            EnabledPeriodic();
+           if (EnabledPeriodic() == 1) {_isRunning = false};
         } else {
             /* disabled */
             if (_lastEnabled != 0) {
