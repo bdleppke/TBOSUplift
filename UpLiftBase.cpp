@@ -7,6 +7,7 @@ int UpLiftBase::Run()
 
     /* this is uplift startup, run  init */
     UpLiftInit();
+    if (UpliftInit() == 1) {_isRunning = false};
 
     while (IsRunning()) {
         auto const start = std::chrono::steady_clock::now();
