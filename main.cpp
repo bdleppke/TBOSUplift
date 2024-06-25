@@ -109,7 +109,7 @@ public:
     }
     if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).IsOK())
     {
-      std::cout << "Could not set passenger tail position: " <<  std::endl;
+      std::cout << "Could not set passenger tail position: " << std::endl;
     }
   }
 
@@ -392,13 +392,11 @@ void UpLift::EnabledInit() {}
 int UpLift::EnabledPeriodic()
 {
   gpioInitialise();
-    ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-   ctre::phoenix6::controls::MotionMagicVoltage dc(0_tr);
-   ctre::phoenix6::controls::MotionMagicVoltage dt(0_tr);
-   ctre::phoenix6::controls::MotionMagicVoltage pc(0_tr);
-   ctre::phoenix6::controls::MotionMagicVoltage pt(0_tr);
-
-
+  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  ctre::phoenix6::controls::MotionMagicVoltage dc(0_tr);
+  ctre::phoenix6::controls::MotionMagicVoltage dt(0_tr);
+  ctre::phoenix6::controls::MotionMagicVoltage pc(0_tr);
+  ctre::phoenix6::controls::MotionMagicVoltage pt(0_tr);
 
   if (gpioRead(24) == 0) // shutdown
   {
@@ -439,17 +437,41 @@ int UpLift::EnabledPeriodic()
     pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     buttonpressed = true;
-    sendbuttoncommand = true;is
+    sendbuttoncommand = true;
   }
   else if (buttonpressed == true)
   {
     ::cout << "Clearing buttonpressed" << std::endl;
     buttonpressed = false;
-    auto dc = (controls::NeutralOut{});
-    auto dt = (controls::NeutralOut{});
-    auto pc = (controls::NeutralOut{});
-    auto pt = (controls::NeutralOut{});
-    sendbuttoncommand = true;
+
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = driverCabLeader.SetControl(controls::NeutralOut{});
+    if (!status.IsOK())
+    {
+      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
+      return 1;
+    }
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = driverTailLeader.SetControl(controls::NeutralOut{});
+    if (!status.IsOK())
+    {
+      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
+      return 1;
+    }
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = passengerCabFollower.SetControl(controls::NeutralOut{});
+    if (!status.IsOK())
+    {
+      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
+      return 1;
+    }
+    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+    status = passengerTailFollower.SetControl(controls::NeutralOut{});
+    if (!status.IsOK())
+    {
+      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
+      return 1;
+    }
   }
 
   if (sendbuttoncommand == true)
@@ -495,13 +517,13 @@ int UpLift::EnabledPeriodic()
   towerPositionsStream.flush();
   if (towerPositionsStream.fail())
   {
-    std::cerr << "Error writing to file: " <<  std::endl;
+    std::cerr << "Error writing to file: " << std::endl;
     // Optionally, you can close the file here
     towerPositionsStream.close();
     return 1;
   }
 
-  if (!dcstatus.IsOK() || !dtstatus.IsOK()|| !pcstatus.IsOK() || !ptstatus.IsOK())
+  if (!dcstatus.IsOK() || !dtstatus.IsOK() || !pcstatus.IsOK() || !ptstatus.IsOK())
   {
 
     std::cout << "Everything is not all good. Shutting down" << std::endl;
