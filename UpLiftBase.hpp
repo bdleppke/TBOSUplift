@@ -10,7 +10,7 @@
  */
 class UpLiftBase {
 public:
-    virtual void UpLiftInit() = 0;
+    virtual int UpLiftInit() = 0;
     virtual void UpLiftPeriodic() = 0;
    // virtual void SetPositionFrom0To100(double cab, double tail) = 0;
 
@@ -46,7 +46,7 @@ public:
         _loopTime = loopTime;
     }
 
-    bool IsRunning() { return _isRunning}
+    bool IsRunning() { return _isRunning;}
 
 
     /**

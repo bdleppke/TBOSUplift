@@ -81,7 +81,7 @@ private:
 
 public:
   /* main uplift interface */
-  void UpLiftInit() override;
+  int UpLiftInit() override;
   void UpLiftPeriodic() override;
 
   bool IsEnabled() override;
@@ -95,25 +95,21 @@ public:
     double cabSetting = cab * maxlift / 100;
     double tailSetting = tail * maxlift / 100;
     ::cout << "Processingtail" << tailSetting << " cab" << cabSetting << std::endl;
-    if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).isOK())
+    if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).IsOK())
     {
-      std::cout << "Could not set drivecab position: " << status.GetName() << std::endl;
-      return 1;
+      std::cout << "Could not set drivecab position: " << std::endl;
     }
-    if (!(driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).isOK())
+    if (!(driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).IsOK())
     {
-      std::cout << "Could not set drivetail position: " << status.GetName() << std::endl;
-      return 1;
+      std::cout << "Could not set drivetail position: " << std::endl;
     }
-    if (!(passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).isOK())
+    if (!(passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).IsOK())
     {
-      std::cout << "Could not set passenger cab position: " << status.GetName() << std::endl;
-      return 1;
+      std::cout << "Could not set passenger cab position: " << std::endl;
     }
-    if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).isOK())
+    if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).IsOK())
     {
-      std::cout << "Could not set passenger tail position: " << status.GetName() << std::endl;
-      return 1;
+      std::cout << "Could not set passenger tail position: " <<  std::endl;
     }
   }
 
@@ -160,7 +156,7 @@ double calculateClosestPosition(double encoder1, double encoder2, int teeth1, in
 /**
  * Runs once at code initialization.
  */
-void UpLift::UpLiftInit()
+int UpLift::UpLiftInit()
 {
   /*
     ctre::phoenix6::configs::CANcoderConfiguration config{};
@@ -291,7 +287,7 @@ void UpLift::UpLiftInit()
     infile >> driverCabFromFile >> driverTailFromFile >> passengerCabFromFile >> passengerTailFromFile;
     if (infile.fail())
     {
-      std::cerr << "Error reading from file tower Positions File " std::endl;
+      std::cerr << "Error reading from file tower Positions File " << std::endl;
       // Optionally, you can close the file here
 
       return 1;
@@ -366,6 +362,7 @@ void UpLift::UpLiftInit()
     std::cerr << "Unable to open towerPositions file for writing." << std::endl;
     return 1;
   }
+  return 0;
 }
 
 /**
@@ -395,6 +392,13 @@ void UpLift::EnabledInit() {}
 int UpLift::EnabledPeriodic()
 {
   gpioInitialise();
+    ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+   ctre::phoenix6::controls::MotionMagicVoltage dc(0_tr);
+   ctre::phoenix6::controls::MotionMagicVoltage dt(0_tr);
+   ctre::phoenix6::controls::MotionMagicVoltage pc(0_tr);
+   ctre::phoenix6::controls::MotionMagicVoltage pt(0_tr);
+
+
 
   if (gpioRead(24) == 0) // shutdown
   {
@@ -403,37 +407,37 @@ int UpLift::EnabledPeriodic()
   if (gpioRead(17) == 0) // all up
   {
 
-    auto dc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    auto dt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    auto pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    auto pt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    dc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    dt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    pt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     buttonpressed = true;
     sendbuttoncommand = true;
   }
   else if (gpioRead(27) == 0) // all down
   {
-    auto dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    auto dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    auto pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    auto pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     buttonpressed = true;
     sendbuttoncommand = true;
   }
   else if (gpioRead(22) == 0) // twist up
   {
-    auto dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    auto dt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    auto pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    auto pt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    dt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    pt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
     buttonpressed = true;
     sendbuttoncommand = true;
   }
   else if (gpioRead(23) == 0) // twist down
   {
-    auto dc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    auto dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    auto pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    auto pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    dc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
     buttonpressed = true;
     sendbuttoncommand = true;is
   }
@@ -491,7 +495,7 @@ int UpLift::EnabledPeriodic()
   towerPositionsStream.flush();
   if (towerPositionsStream.fail())
   {
-    std::cerr << "Error writing to file: " << filePath << std::endl;
+    std::cerr << "Error writing to file: " <<  std::endl;
     // Optionally, you can close the file here
     towerPositionsStream.close();
     return 1;
