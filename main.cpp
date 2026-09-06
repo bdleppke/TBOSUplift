@@ -11,7 +11,7 @@
 #include <thread>
 #include <chrono>
 #include <ctime>
-
+// This is the version before bluetooth
 // cpprest provides macros for all streams but std::clog in basic_types.h
 #ifdef _UTF16_STRINGS
 // On Windows, all strings are wide
