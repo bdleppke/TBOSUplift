@@ -82,6 +82,14 @@ private:
   double cabTargetRotations = 0.0;
   double tailTargetRotations = 0.0;
 
+  // Stator current limit (amps) applied to the two cab motors only while
+  // the cab is actively being commanded downward -- configurable over BLE
+  // via SETCURRENTLIMIT:cab:NN. Not applied going up (needs full torque to
+  // lift) or to the tail motors.
+  double cabDownCurrentLimitAmps = 40.0;
+  bool cabDownLimitActive = false;      // is the limit currently applied to the cab motors?
+  double cabDownLimitAppliedAmps = -1.0; // value it was last applied at, so a changed setting gets pushed immediately
+
 public:
   /* main uplift interface */
   int UpLiftInit() override;
@@ -117,6 +125,8 @@ public:
   {
     bool ok = true;
 
+    ApplyCabCurrentLimit(IsCabMovingDown());
+
     if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabTargetRotations * 1_tr).WithSlot(0))).IsOK())
     {
       std::cout << "Could not set driver cab position: " << std::endl;
@@ -146,6 +156,65 @@ public:
 
     return ok;
   }
+
+  // Position scale: 0 rotations = cab fully down, maxlift (negative) =
+  // cab fully up. So "moving down" means the target is further from the
+  // top than the current actual position -- i.e. numerically greater.
+  // The deadband avoids flapping the current limit on/off from tiny
+  // position noise right as the cab arrives at its target.
+  bool IsCabMovingDown()
+  {
+    constexpr double kDeadbandRotations = 0.25;
+    double cabActual = driverCabLeader.GetPosition().GetValueAsDouble();
+    return (cabTargetRotations - cabActual) > kDeadbandRotations;
+  }
+
+  // Applies (or removes) a stator current limit on the two cab motors
+  // based on whether the cab is currently being driven downward. Only
+  // writes a new config when the desired state actually changed, so this
+  // is cheap to call every loop tick.
+  void ApplyCabCurrentLimit(bool movingDown)
+  {
+    if (movingDown)
+    {
+      if (cabDownLimitActive && cabDownLimitAppliedAmps == cabDownCurrentLimitAmps)
+        return; // already limited at the current setting
+
+      configs::CurrentLimitsConfigs limits{};
+      limits.StatorCurrentLimitEnable = true;
+      limits.StatorCurrentLimit = cabDownCurrentLimitAmps;
+      driverCabLeader.GetConfigurator().Apply(limits);
+      passengerCabFollower.GetConfigurator().Apply(limits);
+
+      cabDownLimitActive = true;
+      cabDownLimitAppliedAmps = cabDownCurrentLimitAmps;
+    }
+    else
+    {
+      if (!cabDownLimitActive)
+        return; // already unlimited
+
+      configs::CurrentLimitsConfigs limits{};
+      limits.StatorCurrentLimitEnable = false;
+      driverCabLeader.GetConfigurator().Apply(limits);
+      passengerCabFollower.GetConfigurator().Apply(limits);
+
+      cabDownLimitActive = false;
+    }
+  }
+
+  // Updates the configured down-current limit (amps). If the limit is
+  // currently active, it's re-applied on the very next control tick so a
+  // change takes effect immediately rather than waiting for the next
+  // up/down transition.
+  void SetCabDownCurrentLimitAmps(double amps)
+  {
+    cabDownCurrentLimitAmps = amps;
+    if (cabDownLimitActive)
+      cabDownLimitAppliedAmps = -1.0; // force ApplyCabCurrentLimit to push the new value
+  }
+
+  double GetCabDownCurrentLimitAmps() { return cabDownCurrentLimitAmps; }
 
   int GetCab()
   {
@@ -602,9 +671,13 @@ void UpLift::DisabledPeriodic()
  *   Write (TX) commands:
  *     RAISE:cab / LOWER:cab / STOP:cab
  *     RAISE:tail / LOWER:tail / STOP:tail
- *     SET:cab:NN / SET:tail:NN     (NN = 0-100)
+ *     SET:cab:NN / SET:tail:NN                 (NN = 0-100)
+ *     SETCURRENTLIMIT:cab:NN                   (NN = amps; stator current
+ *                                                limit applied to the two
+ *                                                cab motors only while the
+ *                                                cab is actively moving down)
  *   Notify (RX) feedback:
- *     "cab:45,tail:30"
+ *     "cab:45,tail:30,cabdowncurrentlimit:40"
  *
  * IMPORTANT: BlueZ's GattManager1.RegisterApplication requires the app's
  * root path (APP_PATH) to implement org.freedesktop.DBus.ObjectManager and
@@ -672,6 +745,25 @@ static void handleBleCommand(UpLift &uplift, const std::string &cmd)
       std::cerr << "[BLE] Bad SET value: " << valueStr << std::endl;
     }
   }
+  else if (action == "SETCURRENTLIMIT")
+  {
+    if (zone != "cab")
+    {
+      std::cerr << "[BLE] SETCURRENTLIMIT only supported for cab" << std::endl;
+      return;
+    }
+    try
+    {
+      double amps = std::stod(valueStr);
+      amps = std::max(0.0, std::min(120.0, amps));
+      std::cout << "[BLE] SETCURRENTLIMIT cab -> " << amps << "A" << std::endl;
+      uplift.SetCabDownCurrentLimitAmps(amps);
+    }
+    catch (...)
+    {
+      std::cerr << "[BLE] Bad SETCURRENTLIMIT value: " << valueStr << std::endl;
+    }
+  }
   else
   {
     std::cerr << "[BLE] Unknown command: " << cmd << std::endl;
@@ -681,7 +773,8 @@ static void handleBleCommand(UpLift &uplift, const std::string &cmd)
 static std::string buildPositionFeedback(UpLift &uplift)
 {
   std::ostringstream out;
-  out << "cab:" << uplift.GetCab() << ",tail:" << uplift.GetTail();
+  out << "cab:" << uplift.GetCab() << ",tail:" << uplift.GetTail()
+      << ",cabdowncurrentlimit:" << uplift.GetCabDownCurrentLimitAmps();
   return out.str();
 }
 
