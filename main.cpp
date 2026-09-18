@@ -72,9 +72,15 @@ private:
   const std::string towerPositionsFile = "towerPositions.txt";
 
   bool buttonpressed = false;
-  bool sendbuttoncommand = false;
   double maxlift = -877;
   int callCount = 0;
+
+  // Current commanded target for each zone, in raw encoder rotations
+  // (same units/scale as maxlift). These are what ApplySyncedPositionControl()
+  // continuously drives the motors toward every loop tick, rather than a
+  // one-shot command sent only when a button/BLE command arrives.
+  double cabTargetRotations = 0.0;
+  double tailTargetRotations = 0.0;
 
 public:
   /* main uplift interface */
@@ -89,25 +95,56 @@ public:
   void DisabledPeriodic() override;
   void SetPositionFrom0To100(double cab, double tail)
   {
-    double cabSetting = cab * maxlift / 100;
-    double tailSetting = tail * maxlift / 100;
-    ::cout << "Processingtail" << tailSetting << " cab" << cabSetting << std::endl;
-    if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).IsOK())
+    // Just record what's being asked for. ApplySyncedPositionControl(),
+    // called every EnabledPeriodic tick, is what actually drives the
+    // motors -- that's what keeps both sides in sync while moving.
+    cabTargetRotations = cab * maxlift / 100;
+    tailTargetRotations = tail * maxlift / 100;
+    std::cout << "Processing tail " << tailTargetRotations << " cab " << cabTargetRotations << std::endl;
+  }
+
+  // Drives each zone's leader (driver side) toward the commanded target,
+  // then drives that zone's follower (passenger side) to the leader's
+  // *actual, just-measured* position -- not the same nominal target the
+  // leader is chasing. Because the follower is always aimed at where the
+  // leader really is right now rather than where it's ultimately headed,
+  // the two sides stay level with each other throughout the entire move,
+  // even when friction differences make one side lag the other.
+  //
+  // Called every loop tick (not just when a new command arrives) so the
+  // sync holds during travel, not only once the leader reaches its target.
+  bool ApplySyncedPositionControl()
+  {
+    bool ok = true;
+
+    if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabTargetRotations * 1_tr).WithSlot(0))).IsOK())
     {
-      std::cout << "Could not set drivecab position: " << std::endl;
+      std::cout << "Could not set driver cab position: " << std::endl;
+      ok = false;
     }
-    if (!(driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).IsOK())
+    if (!(driverTailLeader.SetControl(m_mmReq.WithPosition(tailTargetRotations * 1_tr).WithSlot(0))).IsOK())
     {
-      std::cout << "Could not set drivetail position: " << std::endl;
+      std::cout << "Could not set driver tail position: " << std::endl;
+      ok = false;
     }
-    if (!(passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).IsOK())
+
+    // Read the leaders' actual position fresh, after commanding them above,
+    // so the followers are chasing the freshest possible measurement.
+    units::angle::turn_t cabLeaderPos = driverCabLeader.GetPosition().GetValue();
+    units::angle::turn_t tailLeaderPos = driverTailLeader.GetPosition().GetValue();
+
+    if (!(passengerCabFollower.SetControl(m_mmReq.WithPosition(cabLeaderPos).WithSlot(0))).IsOK())
     {
       std::cout << "Could not set passenger cab position: " << std::endl;
+      ok = false;
     }
-    if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).IsOK())
+    if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailLeaderPos).WithSlot(0))).IsOK())
     {
       std::cout << "Could not set passenger tail position: " << std::endl;
+      ok = false;
     }
+
+    return ok;
   }
 
   int GetCab()
@@ -132,11 +169,16 @@ public:
   // what happens when a physical up/down button is released mid-travel.
   void StopCab()
   {
+    // Hold right here instead of leaving the old target in place -- since
+    // ApplySyncedPositionControl() runs every tick, an unchanged target
+    // would just command the leader straight back toward it next loop.
+    cabTargetRotations = driverCabLeader.GetPosition().GetValueAsDouble();
     driverCabLeader.SetControl(controls::NeutralOut{});
     passengerCabFollower.SetControl(controls::NeutralOut{});
   }
   void StopTail()
   {
+    tailTargetRotations = driverTailLeader.GetPosition().GetValueAsDouble();
     driverTailLeader.SetControl(controls::NeutralOut{});
     passengerTailFollower.SetControl(controls::NeutralOut{});
   }
@@ -381,6 +423,13 @@ int UpLift::UpLiftInit()
     std::cerr << "Unable to open towerPositions file for writing." << std::endl;
     return 1;
   }
+
+  // ApplySyncedPositionControl() runs every EnabledPeriodic tick starting
+  // right after this, so seed the targets with where we actually are --
+  // otherwise the first tick would command everything toward 0.
+  cabTargetRotations = driverCabFromFile;
+  tailTargetRotations = driverTailFromFile;
+
   return 0;
 }
 
@@ -411,128 +460,71 @@ void UpLift::EnabledInit() {}
 int UpLift::EnabledPeriodic()
 {
   gpioInitialise();
-  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-  ctre::phoenix6::controls::MotionMagicVoltage dc(0_tr);
-  ctre::phoenix6::controls::MotionMagicVoltage dt(0_tr);
-  ctre::phoenix6::controls::MotionMagicVoltage pc(0_tr);
-  ctre::phoenix6::controls::MotionMagicVoltage pt(0_tr);
 
   if (gpioRead(24) == 0) // shutdown
   {
     system("shutdown now");
   }
+
   if (gpioRead(17) == 0) // all up
   {
-
-    dc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    dt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    pt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    cabTargetRotations = maxlift;
+    tailTargetRotations = maxlift;
     buttonpressed = true;
-    sendbuttoncommand = true;
   }
   else if (gpioRead(27) == 0) // all down
   {
-    dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    cabTargetRotations = 0.0;
+    tailTargetRotations = 0.0;
     buttonpressed = true;
-    sendbuttoncommand = true;
   }
   else if (gpioRead(22) == 0) // twist up
   {
-    dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    dt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    pt = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
+    cabTargetRotations = 0.0;
+    tailTargetRotations = maxlift;
     buttonpressed = true;
-    sendbuttoncommand = true;
   }
   else if (gpioRead(23) == 0) // twist down
   {
-    dc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    pc = (m_mmReq.WithPosition(maxlift * 1_tr).WithSlot(0));
-    pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    cabTargetRotations = maxlift;
+    tailTargetRotations = 0.0;
     buttonpressed = true;
-    sendbuttoncommand = true;
   }
   else if (buttonpressed == true)
   {
+    // Button just released: hold right here instead of continuing on
+    // toward the old extreme target, and cut power immediately the same
+    // way the original code did.
     ::cout << "Clearing buttonpressed" << std::endl;
     buttonpressed = false;
 
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = driverCabLeader.SetControl(controls::NeutralOut{});
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = driverTailLeader.SetControl(controls::NeutralOut{});
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = passengerCabFollower.SetControl(controls::NeutralOut{});
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = passengerTailFollower.SetControl(controls::NeutralOut{});
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
+    cabTargetRotations = driverCabLeader.GetPosition().GetValueAsDouble();
+    tailTargetRotations = driverTailLeader.GetPosition().GetValueAsDouble();
+
+    driverCabLeader.SetControl(controls::NeutralOut{});
+    driverTailLeader.SetControl(controls::NeutralOut{});
+    passengerCabFollower.SetControl(controls::NeutralOut{});
+    passengerTailFollower.SetControl(controls::NeutralOut{});
   }
 
-  if (sendbuttoncommand == true)
-  {
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    dcstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    dtstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    pcstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    ptstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = driverCabLeader.SetControl(dc);
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = driverTailLeader.SetControl(dt);
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = passengerCabFollower.SetControl(pc);
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = passengerTailFollower.SetControl(pt);
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
+  // Every tick -- while a button/BLE move is in progress AND while holding
+  // still -- re-drive the leaders toward their target and the followers
+  // toward the leaders' actual current position. This is what keeps
+  // driver/passenger level with each other through the whole move rather
+  // than only once the (slower) side finally catches up.
+  bool controlOk = ApplySyncedPositionControl();
 
-    sendbuttoncommand = false;
-  }
+  ctre::phoenix::StatusCode dcstatus = driverCabLeader.GetPosition();
+  ctre::phoenix::StatusCode dtstatus = driverTailLeader.GetPosition();
+  ctre::phoenix::StatusCode pcstatus = passengerCabFollower.GetPosition();
+  ctre::phoenix::StatusCode ptstatus = passengerTailFollower.GetPosition();
 
   towerPositionsStream.seekp(0);
-  towerPositionsStream << std::fixed << std::setprecision(10) << (dcstatus = driverCabLeader.GetPosition()).GetValueAsDouble() << " " << (dtstatus = driverTailLeader.GetPosition()).GetValueAsDouble() << " " << (pcstatus = passengerCabFollower.GetPosition()).GetValueAsDouble() << " " << (ptstatus = passengerTailFollower.GetPosition()).GetValueAsDouble();
+  towerPositionsStream << std::fixed << std::setprecision(10)
+                        << driverCabLeader.GetPosition().GetValueAsDouble() << " "
+                        << driverTailLeader.GetPosition().GetValueAsDouble() << " "
+                        << passengerCabFollower.GetPosition().GetValueAsDouble() << " "
+                        << passengerTailFollower.GetPosition().GetValueAsDouble();
   towerPositionsStream.flush();
   if (towerPositionsStream.fail())
   {
@@ -542,7 +534,7 @@ int UpLift::EnabledPeriodic()
     return 1;
   }
 
-  if (!dcstatus.IsOK() || !dtstatus.IsOK() || !pcstatus.IsOK() || !ptstatus.IsOK())
+  if (!controlOk || !dcstatus.IsOK() || !dtstatus.IsOK() || !pcstatus.IsOK() || !ptstatus.IsOK())
   {
 
     std::cout << "Everything is not all good. Shutting down" << std::endl;
