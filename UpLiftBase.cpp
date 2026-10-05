@@ -6,8 +6,8 @@ int UpLiftBase::Run()
     printf("Starting upLift program...\n");
 
     /* this is uplift startup, run  init */
-    UpLiftInit();
-    if (UpliftInit() == 1) {_isRunning = false};
+    //UpLiftInit();
+    if (UpLiftInit() == 1) {_isRunning = false;}
 
     while (IsRunning()) {
         auto const start = std::chrono::steady_clock::now();
@@ -28,7 +28,7 @@ int UpLiftBase::Run()
             /* enable for 100 ms */
             ctre::phoenix::unmanaged::FeedEnable(100);
             /* run enabled periodic */
-           if (EnabledPeriodic() == 1) {_isRunning = false};
+           if (EnabledPeriodic() == 1) {_isRunning = false;};
         } else {
             /* disabled */
             if (_lastEnabled != 0) {

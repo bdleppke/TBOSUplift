@@ -219,16 +219,6 @@ int UpLift::UpLiftInit()
   fdb.SensorToMechanismRatio = 1.0;
 
   cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
-
-    cfg.HardwareLimitSwitch.ForwardLimitEnable = true; 
-    cfg.HardwareLimitSwitch.ForwardLimitAutosetPositionEnable = true;
-    cfg.HardwareLimitSwitch.ForwardLimitAutosetPositionValue = 1017_tr;
-
-    cfg.HardwareLimitSwitch.ReverseLimitEnable = true;
-    cfg.HardwareLimitSwitch.ReverseLimitAutosetPositionEnable = true;
-    cfg.HardwareLimitSwitch.ReverseLimitAutosetPositionValue = 0_tr;
-
-
   ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for (int i = 0; i < 5; ++i)
   {
@@ -257,7 +247,6 @@ int UpLift::UpLiftInit()
   }
 
   cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
-
   status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for (int i = 0; i < 5; ++i)
   {
@@ -271,7 +260,6 @@ int UpLift::UpLiftInit()
     return 1;
   }
 
-  cfg.HardwareLimitSwitch.ForwardLimitAutosetPositionValue = 1054_tr;
   cfg.MotorOutput.Inverted = signals::InvertedValue::Clockwise_Positive;
   status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
   for (int i = 0; i < 5; ++i)
