@@ -2,7 +2,6 @@
 
 #define _CRT_SECURE_NO_DEPRECATE
 
-#include <cpprest/http_listener.h>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -11,20 +10,18 @@
 #include <thread>
 #include <chrono>
 #include <ctime>
+#include <mutex>
+#include <atomic>
+#include <functional>
+#include <map>
+#include <vector>
+#include <cstdint>
 
-// cpprest provides macros for all streams but std::clog in basic_types.h
-#ifdef _UTF16_STRINGS
-// On Windows, all strings are wide
-#define uclog std::wclog
-#else
-// On POSIX platforms, all strings are narrow
-#define uclog std::clog
-#endif // endif _UTF16_STRINGS
+// Bluetooth (BLE GATT server via BlueZ / sdbus-c++), replacing the old
+// cpprestsdk HTTP listener that served Home Assistant.
+#include <sdbus-c++/sdbus-c++.h>
 
 using namespace std;
-using namespace web::http::experimental::listener;
-using namespace web::http;
-using namespace web;
 
 #include <iostream> // Include all needed libraries here
 #include <pigpio.h>
@@ -80,6 +77,13 @@ private:
   double maxliftTail = 2000;
   int callCount = 0;
 
+  // Current commanded target for each zone, in raw encoder rotations
+  // (same units/scale as maxlift). These are what ApplySyncedPositionControl()
+  // continuously drives the motors toward every loop tick, rather than a
+  // one-shot command sent only when a button/BLE command arrives.
+  double cabTargetRotations = 0.0;
+  double tailTargetRotations = 0.0;
+
 public:
   /* main uplift interface */
   int UpLiftInit() override;
@@ -93,25 +97,56 @@ public:
   void DisabledPeriodic() override;
   void SetPositionFrom0To100(double cab, double tail)
   {
-    double cabSetting = cab * maxliftCab / 100;
-    double tailSetting = tail * maxliftTail / 100;
-    ::cout << "Processingtail" << tailSetting << " cab" << cabSetting << std::endl;
-    if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).IsOK())
+    // Just record what's being asked for. ApplySyncedPositionControl(),
+    // called every EnabledPeriodic tick, is what actually drives the
+    // motors -- that's what keeps both sides in sync while moving.
+    cabTargetRotations = cab * maxliftCab / 100;
+    tailTargetRotations = tail * maxliftCab / 100;
+    std::cout << "Processing tail " << tailTargetRotations << " cab " << cabTargetRotations << std::endl;
+  }
+
+  // Drives each zone's leader (driver side) toward the commanded target,
+  // then drives that zone's follower (passenger side) to the leader's
+  // *actual, just-measured* position -- not the same nominal target the
+  // leader is chasing. Because the follower is always aimed at where the
+  // leader really is right now rather than where it's ultimately headed,
+  // the two sides stay level with each other throughout the entire move,
+  // even when friction differences make one side lag the other.
+  //
+  // Called every loop tick (not just when a new command arrives) so the
+  // sync holds during travel, not only once the leader reaches its target.
+  bool ApplySyncedPositionControl()
+  {
+    bool ok = true;
+
+    if (!(driverCabLeader.SetControl(m_mmReq.WithPosition(cabTargetRotations * 1_tr).WithSlot(0))).IsOK())
     {
-      std::cout << "Could not set drivecab position: " << std::endl;
+      std::cout << "Could not set driver cab position: " << std::endl;
+      ok = false;
     }
-    if (!(driverTailLeader.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).IsOK())
+    if (!(driverTailLeader.SetControl(m_mmReq.WithPosition(tailTargetRotations * 1_tr).WithSlot(0))).IsOK())
     {
-      std::cout << "Could not set drivetail position: " << std::endl;
+      std::cout << "Could not set driver tail position: " << std::endl;
+      ok = false;
     }
-    if (!(passengerCabFollower.SetControl(m_mmReq.WithPosition(cabSetting * 1_tr).WithSlot(0))).IsOK())
+
+    // Read the leaders' actual position fresh, after commanding them above,
+    // so the followers are chasing the freshest possible measurement.
+    units::angle::turn_t cabLeaderPos = driverCabLeader.GetPosition().GetValue();
+    units::angle::turn_t tailLeaderPos = driverTailLeader.GetPosition().GetValue();
+
+    if (!(passengerCabFollower.SetControl(m_mmReq.WithPosition(cabLeaderPos).WithSlot(0))).IsOK())
     {
       std::cout << "Could not set passenger cab position: " << std::endl;
+      ok = false;
     }
-    if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailSetting * 1_tr).WithSlot(0))).IsOK())
+    if (!(passengerTailFollower.SetControl(m_mmReq.WithPosition(tailLeaderPos).WithSlot(0))).IsOK())
     {
       std::cout << "Could not set passenger tail position: " << std::endl;
+      ok = false;
     }
+
+    return ok;
   }
 
   int GetCab()
@@ -121,6 +156,33 @@ public:
   int GetTail()
   {
     return (int)(driverTailLeader.GetPosition().GetValueAsDouble() * 100 / maxliftTail);
+  }
+
+  // ---- Zone-level helpers for the BLE command protocol (RAISE/LOWER/STOP/SET) ----
+  // RAISE/LOWER drive one zone to its extreme while leaving the other zone's
+  // current commanded position untouched, reusing the existing MotionMagic
+  // position control (same mechanism the "SET" command uses).
+  void RaiseCab() { SetPositionFrom0To100(100, GetTail()); }
+  void LowerCab() { SetPositionFrom0To100(0, GetTail()); }
+  void RaiseTail() { SetPositionFrom0To100(GetCab(), 100); }
+  void LowerTail() { SetPositionFrom0To100(GetCab(), 0); }
+
+  // STOP cuts power to that zone's motors immediately (NeutralOut), same as
+  // what happens when a physical up/down button is released mid-travel.
+  void StopCab()
+  {
+    // Hold right here instead of leaving the old target in place -- since
+    // ApplySyncedPositionControl() runs every tick, an unchanged target
+    // would just command the leader straight back toward it next loop.
+    cabTargetRotations = driverCabLeader.GetPosition().GetValueAsDouble();
+    driverCabLeader.SetControl(controls::NeutralOut{});
+    passengerCabFollower.SetControl(controls::NeutralOut{});
+  }
+  void StopTail()
+  {
+    tailTargetRotations = driverTailLeader.GetPosition().GetValueAsDouble();
+    driverTailLeader.SetControl(controls::NeutralOut{});
+    passengerTailFollower.SetControl(controls::NeutralOut{});
   }
 };
 
@@ -375,6 +437,13 @@ int UpLift::UpLiftInit()
     std::cerr << "Unable to open towerPositions file for writing." << std::endl;
     return 1;
   }
+
+  // ApplySyncedPositionControl() runs every EnabledPeriodic tick starting
+  // right after this, so seed the targets with where we actually are --
+  // otherwise the first tick would command everything toward 0.
+  cabTargetRotations = driverCabFromFile;
+  tailTargetRotations = driverTailFromFile;
+
   return 0;
 }
 
@@ -405,135 +474,71 @@ void UpLift::EnabledInit() {}
 int UpLift::EnabledPeriodic()
 {
   gpioInitialise();
-  ctre::phoenix::StatusCode status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-  auto& dtstatus = driverTailLeader.GetPosition();
-  auto& dcstatus = driverCabLeader.GetPosition();
-  auto& ptstatus = passengerTailFollower.GetPosition();
-  auto& pcstatus = passengerCabFollower.GetPosition();
-  
-
-  ctre::phoenix6::controls::MotionMagicVoltage dc(0_tr);
-  ctre::phoenix6::controls::MotionMagicVoltage dt(0_tr);
-  ctre::phoenix6::controls::MotionMagicVoltage pc(0_tr);
-  ctre::phoenix6::controls::MotionMagicVoltage pt(0_tr);
 
   if (gpioRead(24) == 0) // shutdown
   {
     system("shutdown now");
   }
+
   if (gpioRead(17) == 0) // all up
   {
-
-    dc = (m_mmReq.WithPosition(maxliftCab * 1_tr).WithSlot(0));
-    dt = (m_mmReq.WithPosition(maxliftTail * 1_tr).WithSlot(0));
-    pc = (m_mmReq.WithPosition(maxliftCab * 1_tr).WithSlot(0));
-    pt = (m_mmReq.WithPosition(maxliftTail * 1_tr).WithSlot(0));
+    cabTargetRotations = maxliftCab;
+    tailTargetRotations = maxliftTail;
     buttonpressed = true;
-    sendbuttoncommand = true;
   }
   else if (gpioRead(27) == 0) // all down
   {
-    dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    cabTargetRotations = 0.0;
+    tailTargetRotations = 0.0;
     buttonpressed = true;
-    sendbuttoncommand = true;
   }
   else if (gpioRead(22) == 0) // twist up
   {
-    dc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    dt = (m_mmReq.WithPosition(maxliftTail * 1_tr).WithSlot(0));
-    pc = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    pt = (m_mmReq.WithPosition(maxliftTail * 1_tr).WithSlot(0));
+    cabTargetRotations = 0.0;
+    tailTargetRotations = maxliftTail;
     buttonpressed = true;
-    sendbuttoncommand = true;
   }
   else if (gpioRead(23) == 0) // twist down
   {
-    dc = (m_mmReq.WithPosition(maxliftCab * 1_tr).WithSlot(0));
-    dt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
-    pc = (m_mmReq.WithPosition(maxliftCab * 1_tr).WithSlot(0));
-    pt = (m_mmReq.WithPosition(0.0 * 1_tr).WithSlot(0));
+    cabTargetRotations = maxliftCab;
+    tailTargetRotations = 0.0;
     buttonpressed = true;
-    sendbuttoncommand = true;
   }
   else if (buttonpressed == true)
   {
+    // Button just released: hold right here instead of continuing on
+    // toward the old extreme target, and cut power immediately the same
+    // way the original code did.
     ::cout << "Clearing buttonpressed" << std::endl;
     buttonpressed = false;
 
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = driverCabLeader.SetControl(controls::NeutralOut{});
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = driverTailLeader.SetControl(controls::NeutralOut{});
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = passengerCabFollower.SetControl(controls::NeutralOut{});
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = passengerTailFollower.SetControl(controls::NeutralOut{});
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
+    cabTargetRotations = driverCabLeader.GetPosition().GetValueAsDouble();
+    tailTargetRotations = driverTailLeader.GetPosition().GetValueAsDouble();
+
+    driverCabLeader.SetControl(controls::NeutralOut{});
+    driverTailLeader.SetControl(controls::NeutralOut{});
+    passengerCabFollower.SetControl(controls::NeutralOut{});
+    passengerTailFollower.SetControl(controls::NeutralOut{});
   }
 
-  if (sendbuttoncommand == true)
-  {
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  // Every tick -- while a button/BLE move is in progress AND while holding
+  // still -- re-drive the leaders toward their target and the followers
+  // toward the leaders' actual current position. This is what keeps
+  // driver/passenger level with each other through the whole move rather
+  // than only once the (slower) side finally catches up.
+  bool controlOk = ApplySyncedPositionControl();
 
-    status = driverCabLeader.SetControl(dc);
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = driverTailLeader.SetControl(dt);
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = passengerCabFollower.SetControl(pc);
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-    status = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-    status = passengerTailFollower.SetControl(pt);
-    if (!status.IsOK())
-    {
-      std::cout << "Could not command device. Error: " << status.GetName() << std::endl;
-      return 1;
-    }
-
-    sendbuttoncommand = false;
-  }
-   // dcstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-   // dtstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-   // pcstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
-   // ptstatus = ctre::phoenix::StatusCode::StatusCodeNotInitialized;
+  ctre::phoenix::StatusCode dcstatus = driverCabLeader.GetPosition();
+  ctre::phoenix::StatusCode dtstatus = driverTailLeader.GetPosition();
+  ctre::phoenix::StatusCode pcstatus = passengerCabFollower.GetPosition();
+  ctre::phoenix::StatusCode ptstatus = passengerTailFollower.GetPosition();
 
   towerPositionsStream.seekp(0);
-  towerPositionsStream << std::fixed << std::setprecision(10) << (dcstatus = driverCabLeader.GetPosition()).GetValueAsDouble() << " " << (dtstatus = driverTailLeader.GetPosition()).GetValueAsDouble() << " " << (pcstatus = passengerCabFollower.GetPosition()).GetValueAsDouble() << " " << (ptstatus = passengerTailFollower.GetPosition()).GetValueAsDouble();
+  towerPositionsStream << std::fixed << std::setprecision(10)
+                        << driverCabLeader.GetPosition().GetValueAsDouble() << " "
+                        << driverTailLeader.GetPosition().GetValueAsDouble() << " "
+                        << passengerCabFollower.GetPosition().GetValueAsDouble() << " "
+                        << passengerTailFollower.GetPosition().GetValueAsDouble();
   towerPositionsStream.flush();
   if (towerPositionsStream.fail())
   {
@@ -543,7 +548,7 @@ int UpLift::EnabledPeriodic()
     return 1;
   }
 
-  if (!dcstatus.GetStatus().IsOK() || !dtstatus.GetStatus().IsOK() || !pcstatus.GetStatus().IsOK() || !ptstatus.GetStatus().IsOK())
+  if (!controlOk || !dcstatus.IsOK() || !dtstatus.IsOK() || !pcstatus.IsOK() || !ptstatus.IsOK())
   {
 
 //std::cout << "Everything is not all good. Shutting down" << pcstatus.GetStatus()  << dcstatus.GetStatus() << dtstatus.GetStatus() << dcstatus.GetStatus() << std::endl;
@@ -599,6 +604,315 @@ void UpLift::DisabledPeriodic()
   passengerTailFollower.SetControl(controls::NeutralOut{});
 }
 
+/* ============================================================================
+ * Bluetooth (BLE GATT server) — replaces the old cpprestsdk HTTP listener.
+ *
+ * Talks to the Base44/Capacitor phone app over BLE using a custom service
+ * with one write characteristic (commands in) and one notify characteristic
+ * (position feedback out), matching the app's "Bluetooth Configuration"
+ * panel and the existing cab/tail naming used throughout this file.
+ *
+ * Protocol:
+ *   Write (TX) commands:
+ *     RAISE:cab / LOWER:cab / STOP:cab
+ *     RAISE:tail / LOWER:tail / STOP:tail
+ *     SET:cab:NN / SET:tail:NN     (NN = 0-100)
+ *   Notify (RX) feedback:
+ *     "cab:45,tail:30"
+ *
+ * IMPORTANT: BlueZ's GattManager1.RegisterApplication requires the app's
+ * root path (APP_PATH) to implement org.freedesktop.DBus.ObjectManager and
+ * return every service/characteristic via GetManagedObjects — this is
+ * implemented below (GattApplication::GetManagedObjects). If BlueZ still
+ * rejects registration on your bluez version, compare against BlueZ's own
+ * "example-gatt-server" (Python, in the BlueZ source tree under test/),
+ * which is the canonical reference for this wiring.
+ * ============================================================================ */
+
+static const std::string BLE_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+static const std::string BLE_TX_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Write  (app -> Pi)
+static const std::string BLE_RX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Notify (Pi -> app)
+
+static const char *BLE_ADAPTER_PATH = "/org/bluez/hci0";
+static const char *BLE_APP_PATH = "/com/tbosuplift/gatt";
+static const char *BLE_SERVICE_PATH = "/com/tbosuplift/gatt/service0";
+static const char *BLE_TX_CHAR_PATH = "/com/tbosuplift/gatt/service0/char0";
+static const char *BLE_RX_CHAR_PATH = "/com/tbosuplift/gatt/service0/char1";
+
+// Parses "RAISE:cab", "LOWER:tail", "STOP:cab", "SET:tail:45", etc.
+static void handleBleCommand(UpLift &uplift, const std::string &cmd)
+{
+  std::istringstream ss(cmd);
+  std::string action, zone, valueStr;
+  std::getline(ss, action, ':');
+  std::getline(ss, zone, ':');
+  std::getline(ss, valueStr, ':');
+
+  if (zone != "cab" && zone != "tail")
+  {
+    std::cerr << "[BLE] Unknown zone: " << zone << std::endl;
+    return;
+  }
+
+  if (action == "RAISE")
+  {
+    std::cout << "[BLE] RAISE " << zone << std::endl;
+    (zone == "cab") ? uplift.RaiseCab() : uplift.RaiseTail();
+  }
+  else if (action == "LOWER")
+  {
+    std::cout << "[BLE] LOWER " << zone << std::endl;
+    (zone == "cab") ? uplift.LowerCab() : uplift.LowerTail();
+  }
+  else if (action == "STOP")
+  {
+    std::cout << "[BLE] STOP " << zone << std::endl;
+    (zone == "cab") ? uplift.StopCab() : uplift.StopTail();
+  }
+  else if (action == "SET")
+  {
+    try
+    {
+      int target = std::stoi(valueStr);
+      target = std::max(0, std::min(100, target));
+      std::cout << "[BLE] SET " << zone << " -> " << target << std::endl;
+      if (zone == "cab")
+        uplift.SetPositionFrom0To100(target, uplift.GetTail());
+      else
+        uplift.SetPositionFrom0To100(uplift.GetCab(), target);
+    }
+    catch (...)
+    {
+      std::cerr << "[BLE] Bad SET value: " << valueStr << std::endl;
+    }
+  }
+  else
+  {
+    std::cerr << "[BLE] Unknown command: " << cmd << std::endl;
+  }
+}
+
+static std::string buildPositionFeedback(UpLift &uplift)
+{
+  std::ostringstream out;
+  out << "cab:" << uplift.GetCab() << ",tail:" << uplift.GetTail();
+  return out.str();
+}
+
+class BleCharacteristic
+{
+public:
+  BleCharacteristic(sdbus::IConnection &connection,
+                     std::string path,
+                     std::string uuid,
+                     std::string servicePath,
+                     std::vector<std::string> flags)
+      : path_(std::move(path)), uuid_(std::move(uuid)),
+        servicePath_(std::move(servicePath)), flags_(std::move(flags))
+  {
+    object_ = sdbus::createObject(connection, sdbus::ObjectPath{path_});
+
+    object_->registerMethod("ReadValue")
+        .onInterface("org.bluez.GattCharacteristic1")
+        .implementedAs([this](std::map<std::string, sdbus::Variant>)
+                        { return onReadValue(); });
+
+    object_->registerMethod("WriteValue")
+        .onInterface("org.bluez.GattCharacteristic1")
+        .implementedAs([this](std::vector<uint8_t> value, std::map<std::string, sdbus::Variant>)
+                        { onWriteValue(value); });
+
+    object_->registerMethod("StartNotify")
+        .onInterface("org.bluez.GattCharacteristic1")
+        .implementedAs([this]()
+                        { notifying_ = true; });
+
+    object_->registerMethod("StopNotify")
+        .onInterface("org.bluez.GattCharacteristic1")
+        .implementedAs([this]()
+                        { notifying_ = false; });
+
+    object_->registerProperty("UUID")
+        .onInterface("org.bluez.GattCharacteristic1")
+        .withGetter([this]()
+                     { return uuid_; });
+
+    object_->registerProperty("Service")
+        .onInterface("org.bluez.GattCharacteristic1")
+        .withGetter([this]()
+                     { return sdbus::ObjectPath{servicePath_}; });
+
+    object_->registerProperty("Flags")
+        .onInterface("org.bluez.GattCharacteristic1")
+        .withGetter([this]()
+                     { return flags_; });
+
+    object_->registerProperty("Notifying")
+        .onInterface("org.bluez.GattCharacteristic1")
+        .withGetter([this]()
+                     { return notifying_; });
+
+    object_->finishRegistration();
+  }
+
+  std::function<void(const std::vector<uint8_t> &)> onWrite;
+  std::function<std::vector<uint8_t>()> onRead;
+
+  const std::string &uuid() const { return uuid_; }
+  const std::vector<std::string> &flags() const { return flags_; }
+
+  void notify(const std::string &text)
+  {
+    if (!notifying_)
+      return;
+    lastValue_.assign(text.begin(), text.end());
+    std::map<std::string, sdbus::Variant> changed{{"Value", sdbus::Variant(lastValue_)}};
+    object_->emitSignal("PropertiesChanged")
+        .onInterface("org.freedesktop.DBus.Properties")
+        .withArguments(std::string("org.bluez.GattCharacteristic1"), changed, std::vector<std::string>{});
+  }
+
+private:
+  std::vector<uint8_t> onReadValue()
+  {
+    if (onRead)
+      return onRead();
+    return lastValue_;
+  }
+  void onWriteValue(const std::vector<uint8_t> &value)
+  {
+    lastValue_ = value;
+    if (onWrite)
+      onWrite(value);
+  }
+
+  std::string path_, uuid_, servicePath_;
+  std::vector<std::string> flags_;
+  std::unique_ptr<sdbus::IObject> object_;
+  std::vector<uint8_t> lastValue_;
+  bool notifying_ = false;
+};
+
+// Exposes org.freedesktop.DBus.ObjectManager at BLE_APP_PATH so BlueZ's
+// GattManager1.RegisterApplication can discover the service + characteristics.
+class GattApplication
+{
+public:
+  explicit GattApplication(sdbus::IConnection &connection)
+  {
+    object_ = sdbus::createObject(connection, sdbus::ObjectPath{BLE_APP_PATH});
+    object_->registerMethod("GetManagedObjects")
+        .onInterface("org.freedesktop.DBus.ObjectManager")
+        .implementedAs([this]()
+                        { return getManagedObjects(); });
+    object_->finishRegistration();
+  }
+
+  void addService(const std::string &path, const std::string &uuid, bool primary)
+  {
+    std::map<std::string, sdbus::Variant> props{
+        {"UUID", sdbus::Variant(uuid)},
+        {"Primary", sdbus::Variant(primary)}};
+    objects_[path]["org.bluez.GattService1"] = props;
+  }
+
+  void addCharacteristic(const std::string &path, const std::string &uuid,
+                          const std::string &servicePath, const std::vector<std::string> &flags)
+  {
+    std::map<std::string, sdbus::Variant> props{
+        {"UUID", sdbus::Variant(uuid)},
+        {"Service", sdbus::Variant(sdbus::ObjectPath{servicePath})},
+        {"Flags", sdbus::Variant(flags)}};
+    objects_[path]["org.bluez.GattCharacteristic1"] = props;
+  }
+
+private:
+  using InterfaceMap = std::map<std::string, std::map<std::string, sdbus::Variant>>;
+
+  std::map<std::string, InterfaceMap> getManagedObjects()
+  {
+    std::map<sdbus::ObjectPath, InterfaceMap> result;
+    for (auto &[path, ifaces] : objects_)
+      result[sdbus::ObjectPath{path}] = ifaces;
+    // sdbus-c++ marshals std::map<ObjectPath, InterfaceMap> directly as
+    // a{oa{sa{sv}}}; return type kept as InterfaceMap-keyed-by-string above
+    // for readability, converted at the call site if your sdbus-c++ version
+    // needs an explicit sdbus::ObjectPath key type.
+    std::map<std::string, InterfaceMap> out;
+    for (auto &[path, ifaces] : objects_)
+      out[path] = ifaces;
+    return out;
+  }
+
+  std::unique_ptr<sdbus::IObject> object_;
+  std::map<std::string, InterfaceMap> objects_;
+};
+
+static void runBleGattServer(UpLift &uplift)
+{
+  auto connection = sdbus::createSystemBusConnection();
+  connection->requestName("com.tbosuplift.gatt");
+
+  GattApplication app(connection.operator*());
+
+  auto serviceObj = sdbus::createObject(*connection, sdbus::ObjectPath{BLE_SERVICE_PATH});
+  serviceObj->registerProperty("UUID").onInterface("org.bluez.GattService1")
+      .withGetter([]()
+                   { return BLE_SERVICE_UUID; });
+  serviceObj->registerProperty("Primary").onInterface("org.bluez.GattService1")
+      .withGetter([]()
+                   { return true; });
+  serviceObj->finishRegistration();
+  app.addService(BLE_SERVICE_PATH, BLE_SERVICE_UUID, true);
+
+  BleCharacteristic txChar(*connection, BLE_TX_CHAR_PATH, BLE_TX_CHAR_UUID, BLE_SERVICE_PATH,
+                            {"write", "write-without-response"});
+  txChar.onWrite = [&uplift](const std::vector<uint8_t> &value)
+  {
+    std::string cmd(value.begin(), value.end());
+    handleBleCommand(uplift, cmd);
+  };
+  app.addCharacteristic(BLE_TX_CHAR_PATH, BLE_TX_CHAR_UUID, BLE_SERVICE_PATH, txChar.flags());
+
+  BleCharacteristic rxChar(*connection, BLE_RX_CHAR_PATH, BLE_RX_CHAR_UUID, BLE_SERVICE_PATH,
+                            {"notify", "read"});
+  rxChar.onRead = [&uplift]
+  {
+    std::string s = buildPositionFeedback(uplift);
+    return std::vector<uint8_t>(s.begin(), s.end());
+  };
+  app.addCharacteristic(BLE_RX_CHAR_PATH, BLE_RX_CHAR_UUID, BLE_SERVICE_PATH, rxChar.flags());
+
+  auto gattMgrProxy = sdbus::createProxy(*connection, sdbus::ServiceName{"org.bluez"},
+                                          sdbus::ObjectPath{BLE_ADAPTER_PATH});
+  std::map<std::string, sdbus::Variant> registerOptions;
+  gattMgrProxy->callMethod("RegisterApplication")
+      .onInterface("org.bluez.GattManager1")
+      .withArguments(sdbus::ObjectPath{BLE_APP_PATH}, registerOptions);
+
+  std::cout << "[BLE] GATT server running. Service UUID: " << BLE_SERVICE_UUID << std::endl;
+
+  // Poll actual motor position periodically and push it to the phone app
+  // whenever it changes — this catches movement from the physical GPIO
+  // buttons too, not just BLE-issued commands.
+  std::thread notifyThread([&]
+                            {
+    std::string lastSent;
+    while (true)
+    {
+      std::string current = buildPositionFeedback(uplift);
+      if (current != lastSent)
+      {
+        rxChar.notify(current);
+        lastSent = current;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    } });
+  notifyThread.detach();
+
+  connection->enterEventLoop();
+}
+
 /* ------ main function ------ */
 
 int main()
@@ -620,80 +934,17 @@ int main()
 
   /* create and run uplift */
   UpLift uplift{};
-  // return uplift.Run();
   // uplift.SetLoopTime(20_ms); // optionally change loop time for periodic calls
-  // Synchronously bind the listener to all nics.
 
-  uclog << U("Starting listener.") << endl;
-  http_listener listener(U("http://localhost:8080"));
-  listener.open().wait();
+  // Bluetooth (BLE GATT server) replaces the old HTTP listener as the
+  // interface for the phone app. Runs on its own thread since uplift.Run()
+  // below blocks the main thread with the motor control loop.
+  std::cout << "Starting BLE GATT server..." << std::endl;
+  std::thread bleThread(runBleGattServer, std::ref(uplift));
+  bleThread.detach();
 
-  // Handle incoming requests.
-  uclog << U("Setting up JSON listener.") << endl;
-
-  listener.support(methods::GET, [&](http_request request)
-                   {
-		
- // Extract query parameters
-        auto query_params = uri::split_query(request.request_uri().query());
-
-        auto found_cab = query_params.find(U("cab"));
-        auto found_tail = query_params.find(U("tail"));
-        int cab, tail;
-
-        // Check if number1 and number2 are present
-        if (!(found_cab == end(query_params)) && !(found_tail == end(query_params))) {
-
-      
-        // Convert query parameters to integers
-        //int cab, tail;
-        try
-        {
-          cab = std::stoi(query_params[U("cab")]);
-          tail = std::stoi(query_params[U("tail")]);
-          // Check if values are within the valid range
-          if (cab >= 0 && cab <= 100 && tail >= 0 && tail <= 100)
-          {
-            std::cout << "Received tail" << tail << " cab" << cab << std::endl;
-            uplift.SetPositionFrom0To100(cab, tail);
-          }
-        
-
-        } catch (const std::invalid_argument&) {
-            std::cout << "Just returning the current positions";
-        }
-
-        }
-
-
-        cab = uplift.GetCab() ;
-        tail = uplift.GetTail() ;
-
-      //  cab = 15;
-      // tail = 20;
-  
-
-      
-
-        // Process the numbers (you can add your logic here)
-       
-            std::cout << "Sending tail" << tail << " cab" << cab << std::endl;
-
-        // Create a JSON response
-        json::value response;
-        response[U("cab")] = json::value::number(cab);
-        response[U("tail")] = json::value::number(tail);
-
-        // Send the response
-        request.reply(status_codes::OK, response); });
-
-  // Wait while the listener does the heavy lifting.
-  // TODO: Provide a way to safely terminate this loop.
-  uclog << U("Waiting for incoming connection...") << endl;
+  std::cout << "Waiting for incoming Bluetooth connections..." << std::endl;
   uplift.Run();
 
-  // Nothing left to do but commit suicide.
-  uclog << U("Terminating JSON listener.") << endl;
-  listener.close();
   return 0;
 }
